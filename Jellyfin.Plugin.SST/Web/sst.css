@@ -40,17 +40,25 @@
 
 .sst-dialog-content {
     position: relative;
-    background: #1c1c1e;
-    border-radius: 12px;
+    background: radial-gradient(circle at 85% 15%, #232238 0%, #171720 60%, #121218 100%);
+    border: 1px solid rgba(243, 156, 18, 0.25);
+    border-radius: 14px;
     width: 90%;
     max-width: 600px;
     max-height: 85vh;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.7), 0 0 24px rgba(108, 92, 231, 0.15);
     transform: translateY(20px) scale(0.97);
-    transition: transform 0.25s ease;
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     overflow: hidden;
+}
+
+.sst-planet-icon {
+    display: inline-block;
+    margin-right: 6px;
+    filter: drop-shadow(0 0 6px rgba(243, 156, 18, 0.5));
+    vertical-align: middle;
 }
 
 .sst-dialog-open .sst-dialog-content {
@@ -451,25 +459,26 @@
     bottom: 80px;
     right: 20px;
     z-index: 9999;
-    width: 48px;
-    height: 48px;
+    width: 50px;
+    height: 50px;
     border-radius: 50%;
-    border: none;
-    background: rgba(0, 164, 220, 0.85);
+    border: 1px solid rgba(243, 156, 18, 0.35);
+    background: linear-gradient(135deg, rgba(0, 164, 220, 0.95), rgba(108, 92, 231, 0.95));
     color: #fff;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-    transition: transform 0.15s, background 0.15s, opacity 0.15s;
-    opacity: 0.7;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), 0 0 16px rgba(108, 92, 231, 0.4);
+    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), background 0.15s, opacity 0.15s;
+    opacity: 0.85;
 }
 
 .sst-floating-btn:hover {
     opacity: 1;
-    transform: scale(1.1);
-    background: rgba(0, 164, 220, 1);
+    transform: scale(1.12) rotate(15deg);
+    background: linear-gradient(135deg, rgba(0, 180, 240, 1), rgba(120, 100, 245, 1));
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6), 0 0 24px rgba(243, 156, 18, 0.5);
 }
 
 .sst-floating-btn .material-icons {
