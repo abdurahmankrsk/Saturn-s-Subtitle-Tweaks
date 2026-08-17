@@ -2,6 +2,11 @@
 
 All notable changes to Saturn's Subtitle Tweaks (SST) will be documented in this file.
 
+## [1.0.9] - 2026-08-17
+
+### Fixed
+- Fixed button injection by directly matching the `closed_caption` icon button in the video controls without relying on specific container class names.
+
 ## [1.0.8] - 2026-08-17
 
 ### Fixed

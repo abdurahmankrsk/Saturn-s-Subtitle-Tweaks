@@ -666,63 +666,67 @@
     }
 
     function injectOsdButton() {
-        // ONLY search inside active video player OSD containers
-        var osd = document.querySelector('.videoOsdBottom, .videoOsd, .osdBottomRow, .videoPlayerContainer');
-        if (!osd) {
-            // Remove any stray button if video is not playing
-            var strayBtn = document.getElementById('sst-osd-btn');
-            if (strayBtn && strayBtn.parentNode) strayBtn.parentNode.removeChild(strayBtn);
+        var video = document.querySelector('video');
+        var isVideoUrl = window.location.hash && (
+            window.location.hash.indexOf('video') >= 0 ||
+            window.location.hash.indexOf('playback') >= 0
+        );
+
+        if (!video && !isVideoUrl) {
+            var stray = document.getElementById('sst-osd-btn');
+            if (stray && stray.parentNode) stray.parentNode.removeChild(stray);
             return;
         }
 
         var existingBtn = document.getElementById('sst-osd-btn');
-        if (existingBtn) {
-            if (osd.contains(existingBtn)) {
-                return; // Already properly positioned in video OSD
+        if (existingBtn && document.body.contains(existingBtn) && existingBtn.parentNode) {
+            // If already inside the playback controls, we are good
+            if (!existingBtn.closest || (!existingBtn.closest('#mainDrawer') && !existingBtn.closest('.mainDrawer'))) {
+                return;
             }
-            // If button is outside the video OSD (e.g. leftover from sidebar), remove it
             existingBtn.parentNode.removeChild(existingBtn);
         }
 
         var targetParent = null;
         var referenceNode = null;
 
-        // 1. Look for the CC / Subtitle button inside the video OSD
-        var ccBtn = osd.querySelector('.btnSubtitles, .buttonSubtitles, [data-action="subtitles"], [title*="Subtitle"], [title*="subtitle"], [title*="CC"], [aria-label*="Subtitle"], [aria-label*="subtitle"], [aria-label*="CC"]');
+        var allButtons = document.querySelectorAll('button');
+        for (var i = 0; i < allButtons.length; i++) {
+            var b = allButtons[i];
 
-        if (!ccBtn) {
-            var buttons = osd.querySelectorAll('button');
-            for (var i = 0; i < buttons.length; i++) {
-                var b = buttons[i];
-                var icon = b.querySelector('.material-icons, i, span');
-                var text = (icon ? icon.textContent : '') + ' ' + b.textContent + ' ' + (b.title || '') + ' ' + (b.getAttribute('aria-label') || '');
-                if (text.indexOf('closed_caption') >= 0 || text.indexOf('subtitles') >= 0 || text.indexOf('CC') >= 0) {
-                    ccBtn = b;
-                    break;
-                }
+            // Ignore buttons inside navigation drawer or headers
+            if (b.closest && (
+                b.closest('#mainDrawer') ||
+                b.closest('.mainDrawer') ||
+                b.closest('.sidebarNav') ||
+                b.closest('.skinHeader') ||
+                b.closest('.headerLeft')
+            )) {
+                continue;
             }
-        }
 
-        if (ccBtn && ccBtn.parentNode) {
-            targetParent = ccBtn.parentNode;
-            referenceNode = ccBtn.nextSibling;
-        }
+            var html = b.innerHTML || '';
+            var title = (b.title || '') + ' ' + (b.getAttribute('aria-label') || '');
 
-        // 2. Fallback: next to audio or settings button inside video OSD
-        if (!targetParent) {
-            var audioOrSettings = osd.querySelector('.btnAudio, .buttonAudio, .btnSettings, .buttonSettings, .btnFullscreen, .buttonFullscreen');
-            if (audioOrSettings && audioOrSettings.parentNode) {
-                targetParent = audioOrSettings.parentNode;
-                referenceNode = audioOrSettings;
+            // 1. High priority: CC / Subtitle button
+            if (html.indexOf('closed_caption') >= 0 ||
+                html.indexOf('subtitles') >= 0 ||
+                title.toLowerCase().indexOf('subtitle') >= 0 ||
+                title.indexOf('CC') >= 0) {
+                targetParent = b.parentNode;
+                referenceNode = b.nextSibling;
+                break;
             }
-        }
 
-        // 3. Fallback: buttons group inside video OSD
-        if (!targetParent) {
-            var buttonsGroup = osd.querySelector('.buttons-right, .osdControlsButtons, .buttons, .osdBottomRow');
-            if (buttonsGroup) {
-                targetParent = buttonsGroup;
-                referenceNode = null;
+            // 2. Medium priority: Audio / Volume / Settings / Fullscreen in video player
+            if (!targetParent && (
+                html.indexOf('volume_up') >= 0 ||
+                html.indexOf('settings') >= 0 ||
+                html.indexOf('tune') >= 0 ||
+                html.indexOf('fullscreen') >= 0
+            )) {
+                targetParent = b.parentNode;
+                referenceNode = b;
             }
         }
 
