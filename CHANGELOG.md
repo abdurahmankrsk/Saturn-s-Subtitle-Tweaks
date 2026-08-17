@@ -2,6 +2,11 @@
 
 All notable changes to Saturn's Subtitle Tweaks (SST) will be documented in this file.
 
+## [1.0.7] - 2026-08-17
+
+### Fixed
+- Fixed `FileTransformation` reflection registration payload structure and assembly resolution for automatic zero-config client script injection across all devices (browsers, phones, TVs).
+
 ## [1.0.6] - 2026-08-17
 
 ### Added
