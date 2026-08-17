@@ -150,14 +150,23 @@ public sealed partial class ScriptInjector : IHostedService, IDisposable
             return content;
         }
 
-        // Handle JS bundle files (main.jellyfin.bundle.js)
-        if (!content.Contains(JsLoaderMarker, StringComparison.Ordinal))
+        // Handle JS bundle entry files served to the web client
+        if (content.Contains(JsLoaderMarker, StringComparison.Ordinal)
+            || !LooksLikeJavaScriptBundle(content))
         {
-            var jsLoader = $"\n{JsLoaderMarker}\n;(function(){{if(!document.getElementById('sst-script')){{var s=document.createElement('script');s.id='sst-script';s.src='/sst/ClientScript';s.defer=true;document.head.appendChild(s);var c=document.createElement('link');c.id='sst-style';c.rel='stylesheet';c.href='/sst/ClientStyle';document.head.appendChild(c);}}}})();\n";
-            return content + jsLoader;
+            return content;
         }
 
-        return content;
+        var jsLoader = "\n" + JsLoaderMarker + "\n" +
+            ";(function(){try{if(document.getElementById('sst-script'))return;" +
+            "var b=document.querySelector('base');var r=b&&b.href?b.href:'';" +
+            "if(r.endsWith('/'))r=r.slice(0,-1);" +
+            "var s=document.createElement('script');s.id='sst-script';s.src=r+'/sst/ClientScript';s.async=true;" +
+            "document.head.appendChild(s);" +
+            "if(!document.getElementById('sst-client-style')){" +
+            "var l=document.createElement('link');l.id='sst-client-style';l.rel='stylesheet';l.href=r+'/sst/ClientStyle';document.head.appendChild(l);}" +
+            "}catch(e){console.debug('[SST] loader failed',e);}})();\n";
+        return content + jsLoader;
     }
 
     private void RegisterWithFileTransformation()
@@ -192,22 +201,22 @@ public sealed partial class ScriptInjector : IHostedService, IDisposable
                         };
                         registerMethod.Invoke(null, new object?[] { payloadHtml });
 
-                        // 2. Register for main.jellyfin.bundle.js
+                        // 2. Register for webpack entry bundles (versioned filenames in 10.11.x)
                         var payloadBundle = new
                         {
                             id = Guid.Parse("c4b2d3e5-f6a7-4b90-8cde-2345678901bc"),
-                            fileNamePattern = ".*main\\.jellyfin\\.bundle\\.js.*",
+                            fileNamePattern = ".*main\\..*\\.bundle\\.js.*",
                             callbackAssembly = typeof(ScriptInjector).Assembly.FullName,
                             callbackClass = typeof(ScriptInjector).FullName,
                             callbackMethod = nameof(TransformFile)
                         };
                         registerMethod.Invoke(null, new object?[] { payloadBundle });
 
-                        // 3. Register for runtime.bundle.js
+                        // 3. Register for webpack runtime bundles
                         var payloadRuntime = new
                         {
                             id = Guid.Parse("d5c3e4f6-a7b8-4c91-9def-3456789012cd"),
-                            fileNamePattern = ".*runtime\\.bundle\\.js.*",
+                            fileNamePattern = ".*runtime\\..*\\.bundle\\.js.*",
                             callbackAssembly = typeof(ScriptInjector).Assembly.FullName,
                             callbackClass = typeof(ScriptInjector).FullName,
                             callbackMethod = nameof(TransformFile)
@@ -297,6 +306,14 @@ public sealed partial class ScriptInjector : IHostedService, IDisposable
             File.WriteAllText(indexPath, string.Join('\n', lines), Encoding.UTF8);
             LogRemovalSuccess(_logger, indexPath);
         }
+    }
+
+    private static bool LooksLikeJavaScriptBundle(string content)
+    {
+        // Avoid appending the loader to non-JS payloads that slip through FileTransformation.
+        return content.Contains("webpack", StringComparison.Ordinal)
+            || content.Contains("__webpack_require__", StringComparison.Ordinal)
+            || content.Contains("sourceMappingURL=", StringComparison.Ordinal);
     }
 
     private string? FindIndexHtml()
