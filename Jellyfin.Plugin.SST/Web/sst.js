@@ -585,6 +585,17 @@
     }
 
     function checkForSubtitleMenu(node) {
+        // Ignore navigation drawers and headers
+        if (node.classList && (
+            node.classList.contains('mainDrawer') ||
+            node.classList.contains('sidebarNav') ||
+            node.classList.contains('navDrawer') ||
+            node.classList.contains('skinHeader') ||
+            node.id === 'mainDrawer'
+        )) {
+            return;
+        }
+
         var subtitleMenus = [];
         if (node.classList && (
             node.classList.contains('subtitleTrackMenu') ||
@@ -603,8 +614,8 @@
         if (node.classList && (node.classList.contains('actionSheet') || node.classList.contains('dialog'))) {
             var hasSubtitleContent = node.querySelector &&
                 (node.querySelector('[data-tracktype="Subtitle"]') ||
-                 node.textContent.indexOf('Subtitle') >= 0 ||
-                 node.textContent.indexOf('subtitle') >= 0);
+                 node.querySelector('.subtitleTrackSelection') ||
+                 node.classList.contains('subtitleSelectionDialog'));
 
             if (hasSubtitleContent) subtitleMenus.push(node);
         }
@@ -645,46 +656,72 @@
             }
         });
 
-        // Check for any active video playback and inject OSD progress bar button
+        // Continuously check for active video playback and maintain button in OSD control bar
         var checkPlayback = function () {
-            var isOsd = window.location.hash && (
-                window.location.hash.indexOf('videoosd') >= 0 ||
-                window.location.hash.indexOf('video') >= 0 ||
-                window.location.pathname.indexOf('video') >= 0 ||
-                window.location.pathname.indexOf('playback') >= 0
-            );
-            var hasVideo = document.querySelector('video') !== null;
-
-            if (isOsd || hasVideo) {
-                injectOsdButton();
-            } else {
-                var osdBtn = document.getElementById('sst-osd-btn');
-                if (osdBtn && osdBtn.parentNode) osdBtn.parentNode.removeChild(osdBtn);
-            }
+            injectOsdButton();
         };
 
-        setInterval(checkPlayback, 500);
+        setInterval(checkPlayback, 400);
         checkPlayback();
     }
 
     function injectOsdButton() {
-        if (document.getElementById('sst-osd-btn')) return;
+        // ONLY search inside active video player OSD containers
+        var osd = document.querySelector('.videoOsdBottom, .videoOsd, .osdBottomRow, .videoPlayerContainer');
+        if (!osd) {
+            // Remove any stray button if video is not playing
+            var strayBtn = document.getElementById('sst-osd-btn');
+            if (strayBtn && strayBtn.parentNode) strayBtn.parentNode.removeChild(strayBtn);
+            return;
+        }
+
+        var existingBtn = document.getElementById('sst-osd-btn');
+        if (existingBtn) {
+            if (osd.contains(existingBtn)) {
+                return; // Already properly positioned in video OSD
+            }
+            // If button is outside the video OSD (e.g. leftover from sidebar), remove it
+            existingBtn.parentNode.removeChild(existingBtn);
+        }
 
         var targetParent = null;
         var referenceNode = null;
 
-        // 1. Right next to subtitle/audio/settings button in OSD bottom bar
-        var subBtn = document.querySelector('.btnSubtitles, .buttonSubtitles, [data-action="subtitles"], .btnAudio, .buttonAudio, .btnSettings, .buttonSettings');
-        if (subBtn && subBtn.parentNode) {
-            targetParent = subBtn.parentNode;
-            referenceNode = subBtn.nextSibling;
+        // 1. Look for the CC / Subtitle button inside the video OSD
+        var ccBtn = osd.querySelector('.btnSubtitles, .buttonSubtitles, [data-action="subtitles"], [title*="Subtitle"], [title*="subtitle"], [title*="CC"], [aria-label*="Subtitle"], [aria-label*="subtitle"], [aria-label*="CC"]');
+
+        if (!ccBtn) {
+            var buttons = osd.querySelectorAll('button');
+            for (var i = 0; i < buttons.length; i++) {
+                var b = buttons[i];
+                var icon = b.querySelector('.material-icons, i, span');
+                var text = (icon ? icon.textContent : '') + ' ' + b.textContent + ' ' + (b.title || '') + ' ' + (b.getAttribute('aria-label') || '');
+                if (text.indexOf('closed_caption') >= 0 || text.indexOf('subtitles') >= 0 || text.indexOf('CC') >= 0) {
+                    ccBtn = b;
+                    break;
+                }
+            }
         }
 
-        // 2. Buttons container in OSD bottom progress bar
+        if (ccBtn && ccBtn.parentNode) {
+            targetParent = ccBtn.parentNode;
+            referenceNode = ccBtn.nextSibling;
+        }
+
+        // 2. Fallback: next to audio or settings button inside video OSD
         if (!targetParent) {
-            var osdContainer = document.querySelector('.videoOsdBottom .buttons, .videoOsdBottom, .osdBottomRow, .videoOsd .buttons, .osdControls, .videoPlayerContainer .buttons');
-            if (osdContainer) {
-                targetParent = osdContainer;
+            var audioOrSettings = osd.querySelector('.btnAudio, .buttonAudio, .btnSettings, .buttonSettings, .btnFullscreen, .buttonFullscreen');
+            if (audioOrSettings && audioOrSettings.parentNode) {
+                targetParent = audioOrSettings.parentNode;
+                referenceNode = audioOrSettings;
+            }
+        }
+
+        // 3. Fallback: buttons group inside video OSD
+        if (!targetParent) {
+            var buttonsGroup = osd.querySelector('.buttons-right, .osdControlsButtons, .buttons, .osdBottomRow');
+            if (buttonsGroup) {
+                targetParent = buttonsGroup;
                 referenceNode = null;
             }
         }
@@ -696,7 +733,7 @@
             btn.setAttribute('type', 'button');
             btn.setAttribute('tabindex', '0');
             btn.title = "Saturn's Subtitles (SST)";
-            btn.innerHTML = '<span class="sst-planet-icon" style="font-size:1.25em;line-height:1;">🪐</span>';
+            btn.innerHTML = '<span class="sst-planet-icon" style="font-size:1.3em;line-height:1;">🪐</span>';
 
             btn.addEventListener('click', function (e) {
                 e.preventDefault();

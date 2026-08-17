@@ -2,6 +2,11 @@
 
 All notable changes to Saturn's Subtitle Tweaks (SST) will be documented in this file.
 
+## [1.0.8] - 2026-08-17
+
+### Fixed
+- Fixed button placement: strictly scoped to video player OSD right next to the CC button; eliminated sidebar drawer placement.
+
 ## [1.0.7] - 2026-08-17
 
 ### Fixed
