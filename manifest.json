@@ -15,6 +15,14 @@
         "sourceUrl": "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST.zip",
         "checksum": "46ab830b42e1fa9086df26d3db4e10dc",
         "timestamp": "2026-08-17T20:50:00Z"
+      },
+      {
+        "version": "1.0.0.0",
+        "changelog": "Initial release of Saturn's Subtitle Tweaks (SST) v1.0.0",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST.zip",
+        "checksum": "46ab830b42e1fa9086df26d3db4e10dc",
+        "timestamp": "2026-08-17T18:00:00Z"
       }
     ]
   }
