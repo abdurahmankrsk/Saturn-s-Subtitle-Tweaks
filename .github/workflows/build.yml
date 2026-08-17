@@ -1,0 +1,38 @@
+name: Build and package SST plugin
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Build
+        run: dotnet build Jellyfin.Plugin.SST.sln -c Release
+
+      - name: Package zip
+        run: |
+          cd Jellyfin.Plugin.SST/bin/Release/net9.0
+          zip -j ../../../../../Jellyfin.Plugin.SST.zip Jellyfin.Plugin.SST.dll
+
+      - name: Update manifest checksum
+        run: python scripts/update-manifest.py
+
+      - name: Commit release artifacts
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Jellyfin.Plugin.SST.zip manifest.json
+          git diff --staged --quiet || git commit -m "chore: package plugin v$(grep -oP '(?<=<Version>)[^<]+' Directory.Build.props | head -1)"
+          git push
