@@ -2,6 +2,14 @@
 
 All notable changes to Saturn's Subtitle Tweaks (SST) will be documented in this file.
 
+## [1.0.4] - 2026-08-17
+
+### Added
+- Auto-inject CSS stylesheet if not present in the DOM.
+- Added global `window.SST.show()` and `window.SST.close()` functions for manual trigger.
+- Added Sessions API auto-discovery to detect playing media even when player context is hidden.
+- Inline CSS fallbacks so dialogs and floating buttons are styled even without stylesheet.
+
 ## [1.0.3] - 2026-08-17
 
 ### Added

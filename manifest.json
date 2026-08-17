@@ -9,20 +9,20 @@
     "imageUrl": "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST/Web/sst.css",
     "versions": [
       {
+        "version": "1.0.4.0",
+        "changelog": "Auto-inject stylesheet, self-healing CSS inline fallbacks, window.SST.show() global helper, and Sessions API auto-discovery.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST.zip",
+        "checksum": "a30bd92f578ce7637a588948c9a8042c",
+        "timestamp": "2026-08-17T21:20:00Z"
+      },
+      {
         "version": "1.0.3.0",
         "changelog": "Multi-ALC FileTransformation hooks (index.html + main bundle), Alt+S keyboard shortcut, and enhanced playback detection.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST.zip",
-        "checksum": "b1eca78402a9edb8ee51b9cb5895a642",
+        "checksum": "a30bd92f578ce7637a588948c9a8042c",
         "timestamp": "2026-08-17T21:15:00Z"
-      },
-      {
-        "version": "1.0.2.0",
-        "changelog": "In-memory client script injection via FileTransformation plugin; automatic injection without modifying disk files.",
-        "targetAbi": "10.11.0.0",
-        "sourceUrl": "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST.zip",
-        "checksum": "b1eca78402a9edb8ee51b9cb5895a642",
-        "timestamp": "2026-08-17T21:00:00Z"
       }
     ]
   }

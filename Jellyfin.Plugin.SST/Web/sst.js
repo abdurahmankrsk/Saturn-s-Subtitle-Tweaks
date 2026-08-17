@@ -18,15 +18,23 @@
     'use strict';
 
     // ═══════════════════════════════════════════════════════════════
+    // AUTO-INJECT STYLESHEET IF MISSING
+    // ═══════════════════════════════════════════════════════════════
+    if (!document.getElementById('sst-client-style')) {
+        var styleLink = document.createElement('link');
+        styleLink.id = 'sst-client-style';
+        styleLink.rel = 'stylesheet';
+        styleLink.href = '/sst/ClientStyle';
+        document.head.appendChild(styleLink);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
     // CONSTANTS
     // ═══════════════════════════════════════════════════════════════
 
-    const SST_VERSION = '1.0.0';
-    const SST_ID = 'sst-plugin';
+    const SST_VERSION = '1.0.4';
 
     // Common languages with ISO 639-2/B three-letter codes
-    // These are used as the default set; the language selector also allows
-    // any language Jellyfin supports.
     const COMMON_LANGUAGES = [
         { code: 'eng', name: 'English' },
         { code: 'spa', name: 'Spanish' },
@@ -77,151 +85,129 @@
     // API HELPERS
     // ═══════════════════════════════════════════════════════════════
 
-    /**
-     * Get the Jellyfin ApiClient instance.
-     * @returns {object|null} The ApiClient or null if not available.
-     */
     function getApiClient() {
-        // Jellyfin Web exposes ApiClient globally or via window.ApiClient
-        if (typeof ApiClient !== 'undefined') {
-            return ApiClient;
-        }
-        if (window.ApiClient) {
-            return window.ApiClient;
+        if (typeof ApiClient !== 'undefined') return ApiClient;
+        if (window.ApiClient) return window.ApiClient;
+        if (window.ConnectionManager && window.ConnectionManager.getApiClient) {
+            try { return window.ConnectionManager.getApiClient(); } catch (e) {}
         }
         return null;
     }
 
-    /**
-     * Get the playback manager instance.
-     * @returns {object|null}
-     */
     function getPlaybackManager() {
-        // Jellyfin Web exposes playbackManager via various paths
-        if (window.Emby && window.Emby.PlaybackManager) {
-            return window.Emby.PlaybackManager;
-        }
-        // Try the module import path used in newer Jellyfin Web
-        if (window.playbackManager) {
-            return window.playbackManager;
-        }
+        if (window.Emby && window.Emby.PlaybackManager) return window.Emby.PlaybackManager;
+        if (window.playbackManager) return window.playbackManager;
         return null;
     }
 
-    /**
-     * Get currently playing item information from the playback manager.
-     * @returns {{ itemId: string, mediaSourceId: string, serverId: string, title: string } | null}
-     */
-    function getCurrentPlayingItem() {
+    async function getCurrentPlayingItemAsync() {
         var api = getApiClient();
-        if (!api) return null;
 
-        // Try multiple approaches to get current playing item
+        // 1. Try playbackManager
         var pbm = getPlaybackManager();
-
-        // Approach 1: playbackManager.currentItem()
         if (pbm) {
             var item = null;
             try {
-                if (typeof pbm.currentItem === 'function') {
-                    item = pbm.currentItem();
-                } else if (typeof pbm.getCurrentPlayingItem === 'function') {
-                    item = pbm.getCurrentPlayingItem();
-                }
-            } catch (e) {
-                console.debug('[SST] Error getting current item from playbackManager:', e);
-            }
+                if (typeof pbm.currentItem === 'function') item = pbm.currentItem();
+                else if (typeof pbm.getCurrentPlayingItem === 'function') item = pbm.getCurrentPlayingItem();
+            } catch (e) {}
 
             if (item && item.Id) {
                 var mediaSource = null;
                 try {
-                    if (typeof pbm.currentMediaSource === 'function') {
-                        mediaSource = pbm.currentMediaSource();
-                    } else if (typeof pbm.getMediaSource === 'function') {
-                        mediaSource = pbm.getMediaSource();
-                    }
-                } catch (e) {
-                    console.debug('[SST] Error getting media source:', e);
-                }
-
-                var title = item.Name || '';
-                if (item.SeriesName) {
-                    title = item.SeriesName;
-                    if (item.ParentIndexNumber !== undefined && item.IndexNumber !== undefined) {
-                        title += ' S' + String(item.ParentIndexNumber).padStart(2, '0') +
-                                 'E' + String(item.IndexNumber).padStart(2, '0');
-                    }
-                    if (item.Name) {
-                        title += ' - ' + item.Name;
-                    }
-                }
+                    if (typeof pbm.currentMediaSource === 'function') mediaSource = pbm.currentMediaSource();
+                    else if (typeof pbm.getMediaSource === 'function') mediaSource = pbm.getMediaSource();
+                } catch (e) {}
 
                 return {
                     itemId: item.Id,
                     mediaSourceId: mediaSource ? mediaSource.Id : item.Id,
-                    serverId: item.ServerId || api.serverId(),
-                    title: title
+                    serverId: item.ServerId || (api ? api.serverId() : ''),
+                    title: formatItemTitle(item)
                 };
             }
         }
 
-        // Approach 2: parse from URL
-        // URL patterns: /video?... or /#!/videoosd.html
+        // 2. Try URL params
+        var urlParams = new URLSearchParams(window.location.search || window.location.hash.split('?')[1] || '');
+        var paramId = urlParams.get('id') || urlParams.get('itemId');
+        if (paramId && api) {
+            try {
+                var fetchedItem = await api.getItem(api.getCurrentUserId ? api.getCurrentUserId() : '', paramId);
+                if (fetchedItem && fetchedItem.Id) {
+                    return {
+                        itemId: fetchedItem.Id,
+                        mediaSourceId: fetchedItem.Id,
+                        serverId: fetchedItem.ServerId || api.serverId(),
+                        title: formatItemTitle(fetchedItem)
+                    };
+                }
+            } catch (e) {}
+        }
+
+        // 3. Try tracking state
         if (currentItemId) {
             return {
                 itemId: currentItemId,
                 mediaSourceId: currentMediaSourceId || currentItemId,
-                serverId: api.serverId(),
+                serverId: api ? api.serverId() : '',
                 title: ''
             };
+        }
+
+        // 4. Try Sessions API for current device
+        if (api && typeof api.getSessions === 'function') {
+            try {
+                var sessions = await api.getSessions();
+                if (sessions && sessions.length) {
+                    var active = sessions.find(function (s) { return s.NowPlayingItem; });
+                    if (active && active.NowPlayingItem) {
+                        return {
+                            itemId: active.NowPlayingItem.Id,
+                            mediaSourceId: active.NowPlayingItem.Id,
+                            serverId: api.serverId(),
+                            title: formatItemTitle(active.NowPlayingItem)
+                        };
+                    }
+                }
+            } catch (e) {}
         }
 
         return null;
     }
 
-    /**
-     * Search for remote subtitles using Jellyfin's API.
-     * @param {string} itemId - The item ID.
-     * @param {string} language - Three-letter ISO language code.
-     * @returns {Promise<Array>} Array of RemoteSubtitleInfo objects.
-     */
+    function formatItemTitle(item) {
+        if (!item) return 'Media Item';
+        var title = item.Name || '';
+        if (item.SeriesName) {
+            title = item.SeriesName;
+            if (item.ParentIndexNumber !== undefined && item.IndexNumber !== undefined) {
+                title += ' S' + String(item.ParentIndexNumber).padStart(2, '0') +
+                         'E' + String(item.IndexNumber).padStart(2, '0');
+            }
+            if (item.Name) title += ' - ' + item.Name;
+        }
+        return title || item.Name || 'Now Playing';
+    }
+
     async function searchSubtitles(itemId, language) {
         var api = getApiClient();
         if (!api) throw new Error('Jellyfin API client not available');
-
         var url = api.getUrl('/Items/' + itemId + '/RemoteSearch/Subtitles/' + language);
-
-        var response = await api.getJSON(url);
-        return response || [];
+        return await api.getJSON(url) || [];
     }
 
-    /**
-     * Download a remote subtitle and attach it to the item.
-     * @param {string} itemId - The item ID.
-     * @param {string} subtitleId - The subtitle ID from RemoteSubtitleInfo.
-     * @returns {Promise<void>}
-     */
     async function downloadSubtitle(itemId, subtitleId) {
         var api = getApiClient();
         if (!api) throw new Error('Jellyfin API client not available');
-
         var url = api.getUrl('/Items/' + itemId + '/RemoteSearch/Subtitles/' + subtitleId);
-
-        await api.ajax({
-            type: 'POST',
-            url: url
-        });
+        await api.ajax({ type: 'POST', url: url });
     }
 
     // ═══════════════════════════════════════════════════════════════
     // UI: DIALOG CREATION
     // ═══════════════════════════════════════════════════════════════
 
-    /**
-     * Create the SST search dialog HTML.
-     * @param {string} title - Current media title for display.
-     * @returns {HTMLElement}
-     */
     function createSearchDialog(title) {
         var dialog = document.createElement('div');
         dialog.id = 'sst-dialog';
@@ -236,14 +222,11 @@
             '<div class="sst-dialog-content">' +
             '  <div class="sst-dialog-header">' +
             '    <h2 class="sst-dialog-title"><span class="sst-planet-icon">🪐</span> Saturn\'s Subtitles</h2>' +
-            '    <button class="sst-close-btn" id="sst-close-btn" title="Close">' +
-            '      <span class="material-icons">close</span>' +
-            '    </button>' +
+            '    <button class="sst-close-btn" id="sst-close-btn" title="Close">✕</button>' +
             '  </div>' +
             '  <div class="sst-dialog-body">' +
             '    <div class="sst-media-info" id="sst-media-info">' +
-            '      <span class="material-icons" style="font-size:1.1em;margin-right:4px;">movie</span> ' +
-                   escapeHtml(title || 'Unknown media') +
+            '      🎬 ' + escapeHtml(title || 'Currently Playing Media') +
             '    </div>' +
             '    <div class="sst-search-controls">' +
             '      <div class="sst-language-row">' +
@@ -253,8 +236,7 @@
             '        </select>' +
             '      </div>' +
             '      <button id="sst-search-btn" class="sst-btn sst-btn-primary">' +
-            '        <span class="material-icons" style="font-size:1.1em;margin-right:4px;">search</span>' +
-            '        Search' +
+            '        🔍 Search' +
             '      </button>' +
             '    </div>' +
             '    <div id="sst-status" class="sst-status" style="display:none;"></div>' +
@@ -263,8 +245,7 @@
             '  <div class="sst-dialog-footer">' +
             '    <div class="sst-offset-controls" id="sst-offset-section">' +
             '      <div class="sst-offset-label">' +
-            '        <span class="material-icons" style="font-size:1em;margin-right:4px;">timer</span>' +
-            '        Subtitle delay: <span id="sst-offset-value">0.0s</span>' +
+            '        ⏱️ Subtitle delay: <span id="sst-offset-value">0.0s</span>' +
             '      </div>' +
             '      <div class="sst-offset-buttons">' +
             '        <button class="sst-btn sst-btn-offset" data-offset="-0.5">-0.5s</button>' +
@@ -280,57 +261,21 @@
         return dialog;
     }
 
-    /**
-     * Format a subtitle result into an HTML card.
-     * @param {object} sub - RemoteSubtitleInfo from Jellyfin API.
-     * @param {number} index - Result index.
-     * @returns {string} HTML string.
-     */
     function formatSubtitleResult(sub, index) {
         var badges = [];
-
-        if (sub.IsHashMatch) {
-            badges.push('<span class="sst-badge sst-badge-hash">Hash Match</span>');
-        }
-        if (sub.IsForced) {
-            badges.push('<span class="sst-badge sst-badge-forced">Forced</span>');
-        }
-        if (sub.HearingImpaired) {
-            badges.push('<span class="sst-badge sst-badge-sdh">SDH</span>');
-        }
-        if (sub.MachineTranslated) {
-            badges.push('<span class="sst-badge sst-badge-mt">Machine Translated</span>');
-        }
-        if (sub.AiTranslated) {
-            badges.push('<span class="sst-badge sst-badge-ai">AI Translated</span>');
-        }
+        if (sub.IsHashMatch) badges.push('<span class="sst-badge sst-badge-hash">Hash Match</span>');
+        if (sub.IsForced) badges.push('<span class="sst-badge sst-badge-forced">Forced</span>');
+        if (sub.HearingImpaired) badges.push('<span class="sst-badge sst-badge-sdh">SDH</span>');
+        if (sub.MachineTranslated) badges.push('<span class="sst-badge sst-badge-mt">Machine Translated</span>');
+        if (sub.AiTranslated) badges.push('<span class="sst-badge sst-badge-ai">AI Translated</span>');
 
         var metaItems = [];
-
-        if (sub.ProviderName) {
-            metaItems.push('<span class="sst-meta-item"><span class="material-icons sst-meta-icon">cloud</span>' +
-                escapeHtml(sub.ProviderName) + '</span>');
-        }
-        if (sub.Format) {
-            metaItems.push('<span class="sst-meta-item"><span class="material-icons sst-meta-icon">description</span>' +
-                escapeHtml(sub.Format.toUpperCase()) + '</span>');
-        }
-        if (sub.FrameRate && sub.FrameRate > 0) {
-            metaItems.push('<span class="sst-meta-item"><span class="material-icons sst-meta-icon">speed</span>' +
-                sub.FrameRate.toFixed(3) + ' FPS</span>');
-        }
-        if (sub.DownloadCount && sub.DownloadCount > 0) {
-            metaItems.push('<span class="sst-meta-item"><span class="material-icons sst-meta-icon">download</span>' +
-                formatNumber(sub.DownloadCount) + '</span>');
-        }
-        if (sub.CommunityRating && sub.CommunityRating > 0) {
-            metaItems.push('<span class="sst-meta-item"><span class="material-icons sst-meta-icon">star</span>' +
-                sub.CommunityRating.toFixed(1) + '</span>');
-        }
-        if (sub.Author) {
-            metaItems.push('<span class="sst-meta-item"><span class="material-icons sst-meta-icon">person</span>' +
-                escapeHtml(sub.Author) + '</span>');
-        }
+        if (sub.ProviderName) metaItems.push('<span class="sst-meta-item">☁️ ' + escapeHtml(sub.ProviderName) + '</span>');
+        if (sub.Format) metaItems.push('<span class="sst-meta-item">📄 ' + escapeHtml(sub.Format.toUpperCase()) + '</span>');
+        if (sub.FrameRate && sub.FrameRate > 0) metaItems.push('<span class="sst-meta-item">⚡ ' + sub.FrameRate.toFixed(3) + ' FPS</span>');
+        if (sub.DownloadCount && sub.DownloadCount > 0) metaItems.push('<span class="sst-meta-item">⬇️ ' + formatNumber(sub.DownloadCount) + '</span>');
+        if (sub.CommunityRating && sub.CommunityRating > 0) metaItems.push('<span class="sst-meta-item">★ ' + sub.CommunityRating.toFixed(1) + '</span>');
+        if (sub.Author) metaItems.push('<span class="sst-meta-item">👤 ' + escapeHtml(sub.Author) + '</span>');
 
         var releaseName = sub.Name || sub.Comment || ('Subtitle ' + (index + 1));
 
@@ -338,9 +283,7 @@
             '  <div class="sst-result-header">' +
             '    <div class="sst-result-index">' + (index + 1) + '</div>' +
             '    <div class="sst-result-title">' + escapeHtml(releaseName) + '</div>' +
-            '    <button class="sst-btn sst-btn-download" data-subtitle-id="' + escapeHtml(sub.Id) + '" title="Download this subtitle">' +
-            '      <span class="material-icons">download</span>' +
-            '    </button>' +
+            '    <button class="sst-btn sst-btn-download" data-subtitle-id="' + escapeHtml(sub.Id) + '" title="Download this subtitle">⬇️</button>' +
             '  </div>' +
             (badges.length > 0 ? '  <div class="sst-result-badges">' + badges.join('') + '</div>' : '') +
             (metaItems.length > 0 ? '  <div class="sst-result-meta">' + metaItems.join('') + '</div>' : '') +
@@ -352,63 +295,40 @@
     // UI: DIALOG MANAGEMENT
     // ═══════════════════════════════════════════════════════════════
 
-    /**
-     * Show the SST search dialog.
-     */
-    function showDialog() {
+    async function showDialog() {
         if (isDialogOpen) return;
 
-        var playing = getCurrentPlayingItem();
-        if (!playing) {
-            console.warn('[SST] No item currently playing');
-            return;
-        }
+        var playing = await getCurrentPlayingItemAsync();
+        var title = playing ? playing.title : 'Now Playing';
+        var itemId = playing ? playing.itemId : null;
 
         isDialogOpen = true;
 
-        var dialog = createSearchDialog(playing.title);
+        var dialog = createSearchDialog(title);
         document.body.appendChild(dialog);
 
-        // Force reflow then animate in
         requestAnimationFrame(function () {
             dialog.classList.add('sst-dialog-open');
         });
 
-        // Bind events
-        bindDialogEvents(dialog, playing);
+        bindDialogEvents(dialog, itemId);
     }
 
-    /**
-     * Close the SST search dialog.
-     */
     function closeDialog() {
         var dialog = document.getElementById('sst-dialog');
         if (!dialog) return;
 
         dialog.classList.remove('sst-dialog-open');
-
-        // Wait for animation to complete before removing
         setTimeout(function () {
-            if (dialog.parentNode) {
-                dialog.parentNode.removeChild(dialog);
-            }
+            if (dialog.parentNode) dialog.parentNode.removeChild(dialog);
             isDialogOpen = false;
         }, 300);
     }
 
-    /**
-     * Bind all events for the dialog.
-     * @param {HTMLElement} dialog - The dialog element.
-     * @param {object} playing - Current playing item info.
-     */
-    function bindDialogEvents(dialog, playing) {
-        // Close button
+    function bindDialogEvents(dialog, itemId) {
         dialog.querySelector('#sst-close-btn').addEventListener('click', closeDialog);
-
-        // Backdrop click
         dialog.querySelector('#sst-backdrop').addEventListener('click', closeDialog);
 
-        // Escape key
         var keyHandler = function (e) {
             if (e.key === 'Escape') {
                 closeDialog();
@@ -417,84 +337,78 @@
         };
         document.addEventListener('keydown', keyHandler);
 
-        // Search button
         dialog.querySelector('#sst-search-btn').addEventListener('click', function () {
             var language = dialog.querySelector('#sst-language').value;
-            performSearch(playing.itemId, language, dialog);
+            performSearch(itemId, language, dialog);
         });
 
-        // Enter key in language select triggers search
         dialog.querySelector('#sst-language').addEventListener('keydown', function (e) {
             if (e.key === 'Enter') {
                 var language = dialog.querySelector('#sst-language').value;
-                performSearch(playing.itemId, language, dialog);
+                performSearch(itemId, language, dialog);
             }
         });
 
-        // Offset buttons
         var offsetButtons = dialog.querySelectorAll('.sst-btn-offset');
         for (var i = 0; i < offsetButtons.length; i++) {
             offsetButtons[i].addEventListener('click', function () {
                 var offsetValue = parseFloat(this.getAttribute('data-offset'));
-                if (offsetValue === 0) {
-                    currentOffset = 0;
-                } else {
-                    currentOffset = Math.round((currentOffset + offsetValue) * 10) / 10;
-                }
+                if (offsetValue === 0) currentOffset = 0;
+                else currentOffset = Math.round((currentOffset + offsetValue) * 10) / 10;
                 applySubtitleOffset(currentOffset);
                 updateOffsetDisplay(dialog);
             });
         }
 
-        // Update offset display to reflect current state
         updateOffsetDisplay(dialog);
     }
 
-    /**
-     * Perform a subtitle search and display results.
-     * @param {string} itemId - The item ID.
-     * @param {string} language - Three-letter language code.
-     * @param {HTMLElement} dialog - The dialog element.
-     */
     async function performSearch(itemId, language, dialog) {
         var statusEl = dialog.querySelector('#sst-status');
         var resultsEl = dialog.querySelector('#sst-results');
         var searchBtn = dialog.querySelector('#sst-search-btn');
 
-        // Show loading state
+        if (!itemId) {
+            // Re-attempt discovery
+            var playing = await getCurrentPlayingItemAsync();
+            if (playing && playing.itemId) {
+                itemId = playing.itemId;
+                var mediaInfo = dialog.querySelector('#sst-media-info');
+                if (mediaInfo) mediaInfo.textContent = '🎬 ' + playing.title;
+            } else {
+                statusEl.innerHTML = '⚠️ Please start playing a video first to search subtitles for that title.';
+                statusEl.className = 'sst-status sst-status-error';
+                statusEl.style.display = 'block';
+                return;
+            }
+        }
+
         searchBtn.disabled = true;
-        searchBtn.innerHTML = '<span class="sst-spinner"></span> Searching...';
+        searchBtn.innerHTML = '⏳ Searching...';
         statusEl.style.display = 'none';
         resultsEl.innerHTML = '';
 
         try {
             var results = await searchSubtitles(itemId, language);
-
             searchBtn.disabled = false;
-            searchBtn.innerHTML = '<span class="material-icons" style="font-size:1.1em;margin-right:4px;">search</span> Search';
+            searchBtn.innerHTML = '🔍 Search';
 
             if (!results || results.length === 0) {
                 var langName = COMMON_LANGUAGES.find(function (l) { return l.code === language; });
-                statusEl.innerHTML =
-                    '<span class="material-icons" style="font-size:1.2em;margin-right:6px;">subtitles_off</span>' +
-                    'No ' + escapeHtml(langName ? langName.name : language) + ' subtitles found.' +
-                    '<br><span class="sst-status-hint">Try another language or check that a subtitle provider is configured.</span>';
+                statusEl.innerHTML = 'No ' + escapeHtml(langName ? langName.name : language) + ' subtitles found.<br><span class="sst-status-hint">Try another language or verify OpenSubtitles credentials in server settings.</span>';
                 statusEl.className = 'sst-status sst-status-empty';
                 statusEl.style.display = 'block';
                 return;
             }
 
-            statusEl.innerHTML = results.length + ' subtitle' + (results.length !== 1 ? 's' : '') + ' found';
+            statusEl.innerHTML = '✅ ' + results.length + ' subtitle' + (results.length !== 1 ? 's' : '') + ' found';
             statusEl.className = 'sst-status sst-status-success';
             statusEl.style.display = 'block';
 
             var html = '';
-            for (var i = 0; i < results.length; i++) {
-                html += formatSubtitleResult(results[i], i);
-            }
+            for (var i = 0; i < results.length; i++) html += formatSubtitleResult(results[i], i);
             resultsEl.innerHTML = html;
 
-            // Bind download buttons
             var downloadBtns = resultsEl.querySelectorAll('.sst-btn-download');
             for (var j = 0; j < downloadBtns.length; j++) {
                 downloadBtns[j].addEventListener('click', function (e) {
@@ -503,108 +417,48 @@
                     performDownload(itemId, subId, this, dialog);
                 });
             }
-
         } catch (error) {
             searchBtn.disabled = false;
-            searchBtn.innerHTML = '<span class="material-icons" style="font-size:1.1em;margin-right:4px;">search</span> Search';
-
+            searchBtn.innerHTML = '🔍 Search';
             var errorMessage = getErrorMessage(error);
-            statusEl.innerHTML =
-                '<span class="material-icons" style="font-size:1.2em;margin-right:6px;">error_outline</span>' +
-                escapeHtml(errorMessage);
+            statusEl.innerHTML = '⚠️ ' + escapeHtml(errorMessage);
             statusEl.className = 'sst-status sst-status-error';
             statusEl.style.display = 'block';
-
-            console.error('[SST] Search failed:', error);
         }
     }
 
-    /**
-     * Download a subtitle and refresh the player's track list.
-     * @param {string} itemId - The item ID.
-     * @param {string} subtitleId - The subtitle ID.
-     * @param {HTMLElement} button - The download button element.
-     * @param {HTMLElement} dialog - The dialog element.
-     */
     async function performDownload(itemId, subtitleId, button, dialog) {
         var originalHtml = button.innerHTML;
         button.disabled = true;
-        button.innerHTML = '<span class="sst-spinner"></span>';
+        button.innerHTML = '⏳';
 
         try {
             await downloadSubtitle(itemId, subtitleId);
-
-            button.innerHTML = '<span class="material-icons" style="color:#4caf50;">check_circle</span>';
+            button.innerHTML = '✅';
             button.title = 'Downloaded successfully';
 
-            // Show success status
             var statusEl = dialog.querySelector('#sst-status');
-            statusEl.innerHTML =
-                '<span class="material-icons" style="font-size:1.2em;margin-right:6px;color:#4caf50;">check_circle</span>' +
-                'Subtitle downloaded! It should now appear in your subtitle track list.';
+            statusEl.innerHTML = '✅ Subtitle downloaded! Available in your subtitle tracks.';
             statusEl.className = 'sst-status sst-status-success';
             statusEl.style.display = 'block';
-
-            // Try to refresh subtitle tracks
-            refreshSubtitleTracks();
-
         } catch (error) {
             button.disabled = false;
             button.innerHTML = originalHtml;
-
             var errorMessage = getErrorMessage(error);
-
             var statusEl = dialog.querySelector('#sst-status');
-            statusEl.innerHTML =
-                '<span class="material-icons" style="font-size:1.2em;margin-right:6px;">error_outline</span>' +
-                'Download failed: ' + escapeHtml(errorMessage);
+            statusEl.innerHTML = '❌ Download failed: ' + escapeHtml(errorMessage);
             statusEl.className = 'sst-status sst-status-error';
             statusEl.style.display = 'block';
-
-            console.error('[SST] Download failed:', error);
         }
     }
 
-    /**
-     * Try to refresh the player's subtitle track list after download.
-     * This may require reloading the media source info.
-     */
-    function refreshSubtitleTracks() {
-        // Attempt to tell the playback manager to refresh media info
-        // This is necessary for the newly downloaded subtitle to appear
-        var pbm = getPlaybackManager();
-        if (!pbm) return;
-
-        try {
-            // Try various methods that might exist on the playback manager
-            if (typeof pbm.refreshMediaInfo === 'function') {
-                pbm.refreshMediaInfo();
-            } else if (typeof pbm.getPlaybackMediaSources === 'function') {
-                pbm.getPlaybackMediaSources();
-            }
-        } catch (e) {
-            console.debug('[SST] Could not auto-refresh subtitle tracks:', e);
-        }
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // SUBTITLE OFFSET
-    // ═══════════════════════════════════════════════════════════════
-
-    /**
-     * Apply subtitle offset to the current playback.
-     * Uses Jellyfin Web's built-in subtitle sync mechanism.
-     * @param {number} offsetSeconds - Offset in seconds (positive = later, negative = earlier).
-     */
     function applySubtitleOffset(offsetSeconds) {
-        // Method 1: Use the playback manager's subtitle offset if available
         var pbm = getPlaybackManager();
         if (pbm && typeof pbm.setSubtitleOffset === 'function') {
             pbm.setSubtitleOffset(offsetSeconds);
             return;
         }
 
-        // Method 2: Manipulate the video element's text tracks directly
         var videoElements = document.querySelectorAll('video');
         for (var i = 0; i < videoElements.length; i++) {
             var video = videoElements[i];
@@ -612,58 +466,33 @@
                 for (var j = 0; j < video.textTracks.length; j++) {
                     var track = video.textTracks[j];
                     if (track.mode === 'showing' && track.cues) {
-                        // Note: Modifying cue timing directly is not ideal.
-                        // Jellyfin Web typically handles this through its own subtitle sync system.
-                        // This is a fallback only.
-                        console.debug('[SST] Direct text track offset is a fallback mechanism');
+                        for (var k = 0; k < track.cues.length; k++) {
+                            var cue = track.cues[k];
+                            cue.startTime += offsetSeconds;
+                            cue.endTime += offsetSeconds;
+                        }
                     }
                 }
             }
         }
-
-        // Method 3: Dispatch an event that Jellyfin's subtitle sync might listen to
-        try {
-            var event = new CustomEvent('subtitleoffsetchange', {
-                detail: { offset: offsetSeconds },
-                bubbles: true
-            });
-            document.dispatchEvent(event);
-        } catch (e) {
-            console.debug('[SST] Could not dispatch offset event:', e);
-        }
     }
 
-    /**
-     * Update the offset display in the dialog.
-     * @param {HTMLElement} dialog - The dialog element.
-     */
     function updateOffsetDisplay(dialog) {
         var display = dialog.querySelector('#sst-offset-value');
         if (display) {
             var sign = currentOffset > 0 ? '+' : '';
             display.textContent = sign + currentOffset.toFixed(1) + 's';
-
-            if (currentOffset === 0) {
-                display.className = '';
-            } else if (currentOffset > 0) {
-                display.className = 'sst-offset-positive';
-            } else {
-                display.className = 'sst-offset-negative';
-            }
+            if (currentOffset === 0) display.className = '';
+            else if (currentOffset > 0) display.className = 'sst-offset-positive';
+            else display.className = 'sst-offset-negative';
         }
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // MENU INTEGRATION
+    // MENU & BUTTON INTEGRATION
     // ═══════════════════════════════════════════════════════════════
 
-    /**
-     * Add the "Find Subtitles" button to Jellyfin's subtitle menu.
-     * This observes the DOM for the subtitle menu/dialog to appear
-     * and injects our button into it.
-     */
     function setupMenuIntegration() {
-        // Use a MutationObserver to detect when the subtitle menu opens
         var observer = new MutationObserver(function (mutations) {
             for (var i = 0; i < mutations.length; i++) {
                 var mutation = mutations[i];
@@ -677,24 +506,11 @@
         });
 
         observer.observe(document.body, { childList: true, subtree: true });
-
-        // Also add a floating button for quick access during playback
         setupPlaybackButton();
     }
 
-    /**
-     * Check if the added node is or contains the subtitle menu,
-     * and inject our "Find Subtitles" button if so.
-     * @param {HTMLElement} node - The newly added DOM node.
-     */
     function checkForSubtitleMenu(node) {
-        // Jellyfin's subtitle selection appears in dialogs/menus during playback.
-        // We look for the track selection menu and add our option.
-
-        // Look for subtitle-related selectors
         var subtitleMenus = [];
-
-        // The OSD subtitle button menu
         if (node.classList && (
             node.classList.contains('subtitleTrackMenu') ||
             node.classList.contains('trackSelections') ||
@@ -703,60 +519,41 @@
             subtitleMenus.push(node);
         }
 
-        // Also search within the node
         var found = node.querySelectorAll ? node.querySelectorAll(
             '.subtitleTrackMenu, .trackSelections, [data-type="subtitle"], .selectSubtitleContainer'
         ) : [];
 
-        for (var i = 0; i < found.length; i++) {
-            subtitleMenus.push(found[i]);
-        }
+        for (var i = 0; i < found.length; i++) subtitleMenus.push(found[i]);
 
-        // Check for generic dialog/actionSheet containing subtitle tracks
         if (node.classList && (node.classList.contains('actionSheet') || node.classList.contains('dialog'))) {
             var hasSubtitleContent = node.querySelector &&
                 (node.querySelector('[data-tracktype="Subtitle"]') ||
                  node.textContent.indexOf('Subtitle') >= 0 ||
                  node.textContent.indexOf('subtitle') >= 0);
 
-            if (hasSubtitleContent) {
-                subtitleMenus.push(node);
-            }
+            if (hasSubtitleContent) subtitleMenus.push(node);
         }
 
-        for (var k = 0; k < subtitleMenus.length; k++) {
-            injectFindSubtitlesButton(subtitleMenus[k]);
-        }
+        for (var k = 0; k < subtitleMenus.length; k++) injectFindSubtitlesButton(subtitleMenus[k]);
     }
 
-    /**
-     * Inject the "Find Subtitles" button into a subtitle menu.
-     * @param {HTMLElement} menu - The subtitle menu element.
-     */
     function injectFindSubtitlesButton(menu) {
-        // Don't inject twice
         if (menu.querySelector('.sst-find-btn')) return;
 
         var btn = document.createElement('button');
         btn.className = 'sst-find-btn';
-        btn.innerHTML =
-            '<span class="material-icons" style="font-size:1.2em;margin-right:8px;">travel_explore</span>' +
-            '🪐 Find Subtitles (SST)';
+        btn.innerHTML = '🪐 Find Subtitles (SST)';
         btn.title = 'Search for subtitles online';
 
         btn.addEventListener('click', function (e) {
             e.preventDefault();
             e.stopPropagation();
 
-            // Close the current menu if possible
             var closeBtn = menu.querySelector('.btnCloseActionSheet, .btnCancel, [data-action="close"]');
             if (closeBtn) closeBtn.click();
-
-            // Small delay to let the menu close
             setTimeout(showDialog, 100);
         });
 
-        // Style it to match the menu
         btn.style.cssText = 'width:100%;padding:12px 16px;text-align:left;border:none;' +
             'background:transparent;color:inherit;font-size:inherit;cursor:pointer;' +
             'display:flex;align-items:center;border-top:1px solid rgba(255,255,255,0.1);';
@@ -764,25 +561,12 @@
         menu.appendChild(btn);
     }
 
-    /**
-     * Set up a floating SST button that appears during video playback.
-     * This provides an alternative way to access SST without going through
-     * the subtitle menu.
-     */
     function setupPlaybackButton() {
         // Keyboard shortcut: Alt+S opens subtitle search
         document.addEventListener('keydown', function (e) {
             if (e.altKey && (e.key === 's' || e.key === 'S')) {
                 e.preventDefault();
                 showDialog();
-            }
-        });
-
-        // Listen for playback start/stop to show/hide the button
-        document.addEventListener('viewshow', function (e) {
-            var target = e.target || e.detail;
-            if (target && (target.id === 'videoOsdPage' || target.classList?.contains('videoPlayerContainer'))) {
-                showFloatingButton();
             }
         });
 
@@ -795,87 +579,54 @@
                 window.location.pathname.indexOf('playback') >= 0
             );
             var hasVideo = document.querySelector('video') !== null;
-            var isPlaying = false;
-            try {
-                var pbm = getPlaybackManager();
-                if (pbm) {
-                    isPlaying = (typeof pbm.isPlaying === 'function' && pbm.isPlaying()) ||
-                                (typeof pbm.currentItem === 'function' && pbm.currentItem() !== null);
-                }
-            } catch (err) {}
 
-            if (isOsd || hasVideo || isPlaying) {
+            if (isOsd || hasVideo) {
                 showFloatingButton();
             } else {
                 hideFloatingButton();
             }
         };
 
-        // Periodic check
         setInterval(checkPlayback, 1000);
+        checkPlayback();
     }
 
-    /**
-     * Show the floating SST access button.
-     */
     function showFloatingButton() {
         if (document.getElementById('sst-floating-btn')) return;
 
         var btn = document.createElement('button');
         btn.id = 'sst-floating-btn';
         btn.className = 'sst-floating-btn';
-        btn.innerHTML = '<span class="sst-floating-icon" style="font-size:22px;">🪐</span>';
-        btn.title = 'Saturn\'s Subtitle Tweaks (SST)';
-        btn.addEventListener('click', showDialog);
+        btn.innerHTML = '<span style="font-size:24px;line-height:1;">🪐</span>';
+        btn.title = 'Saturn\'s Subtitle Tweaks (Alt + S)';
+        btn.style.cssText = 'position:fixed;bottom:80px;right:20px;z-index:999999;' +
+            'width:50px;height:50px;border-radius:50%;border:1px solid rgba(243,156,18,0.4);' +
+            'background:linear-gradient(135deg,rgba(0,164,220,0.95),rgba(108,92,231,0.95));' +
+            'color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;' +
+            'box-shadow:0 4px 16px rgba(0,0,0,0.6),0 0 16px rgba(108,92,231,0.4);';
 
+        btn.addEventListener('click', showDialog);
         document.body.appendChild(btn);
     }
 
-    /**
-     * Hide the floating SST access button.
-     */
     function hideFloatingButton() {
         var btn = document.getElementById('sst-floating-btn');
-        if (btn && btn.parentNode) {
-            btn.parentNode.removeChild(btn);
-        }
+        if (btn && btn.parentNode) btn.parentNode.removeChild(btn);
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // PLAYBACK STATE TRACKING
-    // ═══════════════════════════════════════════════════════════════
-
-    /**
-     * Set up listeners to track current playback state
-     * and reset offset when playback changes.
-     */
     function setupPlaybackTracking() {
-        // Listen for Jellyfin playback events
-        var events = [
-            'playbackstart',
-            'playbackstop',
-            'MediaSourceChanged'
-        ];
-
+        var events = ['playbackstart', 'playbackstop', 'MediaSourceChanged'];
         events.forEach(function (eventName) {
             document.addEventListener(eventName, function (e) {
                 if (eventName === 'playbackstart') {
-                    // Store current item info
                     try {
                         var detail = e.detail || {};
-                        if (detail.item) {
-                            currentItemId = detail.item.Id;
-                        }
-                        if (detail.mediaSource) {
-                            currentMediaSourceId = detail.mediaSource.Id;
-                        }
-                    } catch (err) {
-                        console.debug('[SST] Error in playbackstart handler:', err);
-                    }
+                        if (detail.item) currentItemId = detail.item.Id;
+                        if (detail.mediaSource) currentMediaSourceId = detail.mediaSource.Id;
+                    } catch (err) {}
+                    showFloatingButton();
                 }
-
                 if (eventName === 'playbackstop' || eventName === 'MediaSourceChanged') {
-                    // Reset subtitle offset when playback stops or media changes
                     currentOffset = 0;
                     currentItemId = null;
                     currentMediaSourceId = null;
@@ -885,15 +636,6 @@
         });
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // UTILITY FUNCTIONS
-    // ═══════════════════════════════════════════════════════════════
-
-    /**
-     * Escape HTML to prevent XSS.
-     * @param {string} str - String to escape.
-     * @returns {string} Escaped string.
-     */
     function escapeHtml(str) {
         if (!str) return '';
         var div = document.createElement('div');
@@ -901,72 +643,45 @@
         return div.innerHTML;
     }
 
-    /**
-     * Format a large number with K/M suffixes.
-     * @param {number} num - Number to format.
-     * @returns {string} Formatted string.
-     */
     function formatNumber(num) {
         if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
         if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
         return String(num);
     }
 
-    /**
-     * Extract a human-readable error message from various error types.
-     * @param {*} error - The error object.
-     * @returns {string} Human-readable message.
-     */
     function getErrorMessage(error) {
         if (!error) return 'An unknown error occurred.';
-
-        // HTTP status code errors
-        if (error.status === 401 || error.status === 403) {
-            return 'You do not have permission to search for subtitles. ' +
-                'Contact your server administrator.';
-        }
-        if (error.status === 404) {
-            return 'No subtitle provider is configured. ' +
-                'Ask your server administrator to install a subtitle provider plugin (e.g., Open Subtitles).';
-        }
-        if (error.status === 429) {
-            return 'Subtitle provider rate limit reached. Please try again later.';
-        }
-        if (error.status >= 500) {
-            return 'The server encountered an error. Please try again later.';
-        }
-
-        // Network errors
-        if (error.message && error.message.indexOf('network') >= 0) {
-            return 'Network error. Check your connection and try again.';
-        }
-
-        // Fallback
+        if (error.status === 401 || error.status === 403) return 'Permission denied for subtitle operations.';
+        if (error.status === 404) return 'No subtitle provider configured on server.';
+        if (error.status === 429) return 'Provider rate limit reached. Try again later.';
+        if (error.status >= 500) return 'Server error occurred while searching subtitles.';
         if (error.message) return error.message;
         if (typeof error === 'string') return error;
-
-        return 'An unexpected error occurred. Check the browser console for details.';
+        return 'An error occurred during subtitle operation.';
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // INITIALIZATION
+    // GLOBAL EXPOSURE & INIT
     // ═══════════════════════════════════════════════════════════════
 
-    /**
-     * Initialize SST when the page is ready.
-     */
-    function init() {
-        console.info('[SST] Saturn\'s Subtitle Tweaks v' + SST_VERSION + ' loaded');
+    window.SST = {
+        version: SST_VERSION,
+        show: showDialog,
+        close: closeDialog,
+        search: searchSubtitles,
+        download: downloadSubtitle,
+        setOffset: applySubtitleOffset
+    };
 
+    function init() {
+        console.info('[SST] Saturn\'s Subtitle Tweaks v' + SST_VERSION + ' loaded 🪐 (Type SST.show() or press Alt+S)');
         setupPlaybackTracking();
         setupMenuIntegration();
     }
 
-    // Wait for DOM ready
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
     } else {
         init();
     }
-
 })();
