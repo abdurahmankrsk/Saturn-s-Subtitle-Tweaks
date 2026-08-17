@@ -147,10 +147,18 @@ YMMMUP^
 ## 🛠️ Installation & Mission Setup
 
 ### Method 1: Jellyfin Plugin Catalog (Recommended)
-1. Navigate to **Jellyfin Dashboard** → **Plugins** → **Repositories**.
-2. Add the Saturn's Subtitle Tweaks manifest repository.
-3. Install **Saturn's Subtitle Tweaks** from the **Catalog** tab.
-4. Restart your Jellyfin Server instance.
+
+1. Open **Dashboard** → **Plugins** → **Repositories**.
+2. Click **+** and add this manifest URL:
+
+   ```text
+   https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/manifest.json
+   ```
+
+3. Open the **Catalog** tab, find **Saturn's Subtitle Tweaks**, and install or update.
+4. Restart Jellyfin when prompted.
+
+If an update fails with a checksum error, wait a minute and try again (GitHub `raw` CDN can lag behind the latest commit), or run `.\scripts\build-release.ps1` locally and copy the DLL manually.
 
 ### Method 2: Manual Assembly Deployment
 1. Grab the latest `Jellyfin.Plugin.SST.dll` artifact from [Releases](../../releases).
@@ -179,7 +187,7 @@ For containerized environments with read-only filesystems, add the tags manually
             ↓
     2. Click Subtitle/CC Menu in Player Controls
             ↓
-    3. Select "Find Subtitles (SST)"  (or click floating Saturn icon 🪐)
+    3. Select **Find subtitles** in the subtitle menu
             ↓
     4. Select Language & Click "Search"
             ↓
