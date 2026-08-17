@@ -1,0 +1,49 @@
+<div id="SSTConfigPage" data-role="page" class="page type-interior pluginConfigurationPage"
+    data-controller="__plugin/sst-config-js">
+    <div data-role="content">
+        <div class="content-primary">
+            <h2 class="sectionTitle">Saturn's Subtitle Tweaks (SST)</h2>
+            <p class="fieldDescription">
+                SST provides an enhanced subtitle experience with in-player search, download, and timing controls.
+            </p>
+
+            <form id="SSTConfigForm">
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="enableSSTUI" />
+                        <span>Enable SST UI</span>
+                    </label>
+                    <div class="fieldDescription checkboxFieldDescription">
+                        Show the "Find Subtitles" option in the playback subtitle menu.
+                    </div>
+                </div>
+
+                <div class="inputContainer">
+                    <label class="inputLabel" for="defaultLanguage">Default subtitle language (optional)</label>
+                    <input is="emby-input" type="text" id="defaultLanguage"
+                        placeholder="e.g., eng (leave blank to use Jellyfin user preference)" />
+                    <div class="fieldDescription">
+                        ISO 639-2 three-letter language code. Leave blank to use the user's Jellyfin language setting.
+                    </div>
+                </div>
+
+                <h3 class="sectionTitle sectionTitle-cards">Subtitle Provider</h3>
+                <div class="fieldDescription" style="margin-bottom: 1em;">
+                    SST uses Jellyfin's built-in subtitle provider system. To search and download subtitles,
+                    you must install and configure a subtitle provider plugin (e.g., <strong>Open Subtitles</strong>)
+                    from the Jellyfin plugin catalog.
+                </div>
+                <div class="fieldDescription" style="margin-bottom: 1em;">
+                    SST does <strong>not</strong> store any subtitle provider credentials.
+                    Each provider plugin manages its own authentication.
+                </div>
+
+                <div>
+                    <button is="emby-button" type="submit" class="raised button-submit block">
+                        <span>Save</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
