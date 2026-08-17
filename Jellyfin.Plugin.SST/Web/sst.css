@@ -114,6 +114,31 @@
     min-height: 0;
 }
 
+.sst-stub-message {
+    margin: 0 0 8px;
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #f39c12;
+}
+
+.sst-stub-detail {
+    margin: 0;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    color: #b0b0b0;
+}
+
+/* Injected action sheet row (matches Jellyfin listItem layout) */
+.sst-action-sheet-divider {
+    height: 1px;
+    margin: 4px 0;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.sst-find-subtitles-item {
+    color: inherit;
+}
+
 .sst-media-info {
     display: flex;
     align-items: center;
