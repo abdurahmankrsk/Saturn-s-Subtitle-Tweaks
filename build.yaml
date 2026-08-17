@@ -1,0 +1,26 @@
+name: "Saturn's Subtitle Tweaks"
+guid: "b3a1c2d4-e5f6-4a89-9bcd-1234567890ab"
+version: 1
+targetAbi: "10.11.0.0"
+framework: "net9.0"
+owner: "community"
+overview: "Enhanced in-player subtitle search, download, and timing controls"
+description: >-
+  Saturn's Subtitle Tweaks (SST) provides an enhanced subtitle experience for Jellyfin.
+  Search for subtitles online, view multiple results with rich metadata, download with one click,
+  and fine-tune subtitle timing — all without leaving the video player.
+  Requires a subtitle provider plugin (e.g., Open Subtitles) to be installed and configured.
+category: "Subtitles"
+artifacts:
+  - "Jellyfin.Plugin.SST.dll"
+changelog: |-
+  ## v1.0.0
+  - Initial release
+  - In-player subtitle search UI
+  - Language selector with 30+ languages
+  - Rich search results (release name, uploader, FPS, hash match, SDH, forced, etc.)
+  - One-click subtitle downloading
+  - Fine-grained subtitle offset controls (±0.1s, ±0.5s)
+  - Floating access button during playback
+  - Responsive design (desktop, mobile, TV)
+  - No credentials required — uses Jellyfin's existing subtitle provider system
