@@ -1,0 +1,21 @@
+[
+  {
+    "guid": "b3a1c2d4-e5f6-4a89-9bcd-1234567890ab",
+    "name": "Saturn's Subtitle Tweaks",
+    "description": "Saturn's Subtitle Tweaks (SST) provides an enhanced in-player subtitle experience for Jellyfin. Search remote subtitles online across configured providers, inspect rich metadata, download with one click, and fine-tune timing with temporary offset controls without leaving the video player.",
+    "overview": "Enhanced in-player subtitle search, download, and timing controls for Jellyfin.",
+    "owner": "abdurahmankrsk",
+    "category": "Subtitles",
+    "imageUrl": "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST/Web/sst.css",
+    "versions": [
+      {
+        "version": "1.0.0.0",
+        "changelog": "Initial release of Saturn's Subtitle Tweaks (SST) v1.0.0 with in-player search, language picker, metadata badges, one-click download, and temporal timing controls.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST.zip",
+        "checksum": "c86a48ae03aab6014789705d7d84060b",
+        "timestamp": "2026-08-17T18:00:00Z"
+      }
+    ]
+  }
+]
