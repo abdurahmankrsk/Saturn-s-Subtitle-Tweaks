@@ -2,6 +2,21 @@
 
 All notable changes to Saturn's Subtitle Tweaks (SST) will be documented in this file.
 
+## [1.1.0] - 2026-08-18
+
+### Added
+- Phase 1 POC: **Find subtitles** injected into Jellyfin 10.11.x subtitle action sheet during playback
+- Modular client architecture (`SST.Core`, `SST.UI`, `SST.Integration`) for future native jellyfin-web integration
+- Plugin catalog icon (`Web/icon.png`)
+- `scripts/build-release.ps1` and GitHub Actions workflow for packaging + manifest checksum updates
+
+### Fixed
+- Reliable web client script loading (`<base>`-aware loader, webpack bundle patterns)
+- Removed crash-prone legacy injection (`showFloatingButton`, 400ms polling, cue hacking, etc.)
+- Manifest `imageUrl`, checksum, and dashboard update metadata for v1.1.0.0
+- `EnableSSTUI` plugin setting now respected by the web client
+- Client script/CSS cache headers set to `no-cache` so updates apply immediately
+
 ## [1.0.10] - 2026-08-17
 
 ### Added
