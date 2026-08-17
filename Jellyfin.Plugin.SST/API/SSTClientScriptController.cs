@@ -4,6 +4,7 @@ using System.Reflection;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Net.Http.Headers;
 
 namespace Jellyfin.Plugin.SST.API;
 
@@ -35,6 +36,7 @@ public class SSTClientScriptController : ControllerBase
             return NotFound();
         }
 
+        Response.Headers[HeaderNames.CacheControl] = "no-cache, no-store, must-revalidate";
         return File(stream, "application/javascript");
     }
 
@@ -56,6 +58,7 @@ public class SSTClientScriptController : ControllerBase
             return NotFound();
         }
 
+        Response.Headers[HeaderNames.CacheControl] = "no-cache, no-store, must-revalidate";
         return File(stream, "text/css");
     }
 }
