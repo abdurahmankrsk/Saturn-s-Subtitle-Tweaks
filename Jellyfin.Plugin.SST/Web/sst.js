@@ -235,7 +235,7 @@
             '<div class="sst-dialog-backdrop" id="sst-backdrop"></div>' +
             '<div class="sst-dialog-content">' +
             '  <div class="sst-dialog-header">' +
-            '    <h2 class="sst-dialog-title">Find Subtitles</h2>' +
+            '    <h2 class="sst-dialog-title"><span class="sst-planet-icon">🪐</span> Saturn\'s Subtitles</h2>' +
             '    <button class="sst-close-btn" id="sst-close-btn" title="Close">' +
             '      <span class="material-icons">close</span>' +
             '    </button>' +
@@ -740,8 +740,8 @@
         var btn = document.createElement('button');
         btn.className = 'sst-find-btn';
         btn.innerHTML =
-            '<span class="material-icons" style="font-size:1.2em;margin-right:8px;">search</span>' +
-            'Find Subtitles (SST)';
+            '<span class="material-icons" style="font-size:1.2em;margin-right:8px;">travel_explore</span>' +
+            '🪐 Find Subtitles (SST)';
         btn.title = 'Search for subtitles online';
 
         btn.addEventListener('click', function (e) {
@@ -806,8 +806,8 @@
         var btn = document.createElement('button');
         btn.id = 'sst-floating-btn';
         btn.className = 'sst-floating-btn';
-        btn.innerHTML = '<span class="material-icons">subtitles</span>';
-        btn.title = 'Saturn\'s Subtitle Tweaks';
+        btn.innerHTML = '<span class="sst-floating-icon" style="font-size:22px;">🪐</span>';
+        btn.title = 'Saturn\'s Subtitle Tweaks (SST)';
         btn.addEventListener('click', showDialog);
 
         document.body.appendChild(btn);
