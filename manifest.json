@@ -2,27 +2,19 @@
   {
     "guid": "b3a1c2d4-e5f6-4a89-9bcd-1234567890ab",
     "name": "Saturn's Subtitle Tweaks",
-    "description": "Saturn's Subtitle Tweaks (SST) provides an enhanced in-player subtitle experience for Jellyfin. Search remote subtitles online across configured providers, inspect rich metadata, download with one click, and fine-tune timing with temporary offset controls without leaving the video player.",
-    "overview": "Enhanced in-player subtitle search, download, and timing controls for Jellyfin.",
+    "description": "Saturn's Subtitle Tweaks (SST) enhances Jellyfin playback with in-player subtitle search, download, and temporary timing controls. Phase 1 provides a \"Find subtitles\" entry in the CC/subtitle menu during playback. Requires a configured subtitle provider (e.g., Open Subtitles).",
+    "overview": "In-player subtitle search and timing controls for Jellyfin Web and supported clients.",
     "owner": "abdurahmankrsk",
     "category": "Subtitles",
-    "imageUrl": "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST/Web/sst.css",
+    "imageUrl": "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST/Web/icon.png",
     "versions": [
       {
-        "version": "1.0.10.0",
-        "changelog": "Hook into main.jellyfin.bundle.js and runtime.bundle.js via FileTransformation for guaranteed universal script execution.",
+        "version": "1.1.0.0",
+        "changelog": "Phase 1 POC: reliable web script loading; \"Find subtitles\" injected into the Jellyfin 10.11.x subtitle action sheet; stub dialog; removed crash-prone injection code; improved FileTransformation bundle hooks.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST.zip",
-        "checksum": "4cc3a1863b9fe78cef833e8e0d907b73",
-        "timestamp": "2026-08-17T21:50:00Z"
-      },
-      {
-        "version": "1.0.9.0",
-        "changelog": "Direct sibling insertion next to closed_caption icon in video controls; eliminated container class dependencies.",
-        "targetAbi": "10.11.0.0",
-        "sourceUrl": "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST.zip",
-        "checksum": "4cc3a1863b9fe78cef833e8e0d907b73",
-        "timestamp": "2026-08-17T21:45:00Z"
+        "checksum": "46541a0e8fe96f2378314cf33d04f055",
+        "timestamp": "2026-08-17T22:18:04Z"
       }
     ]
   }
