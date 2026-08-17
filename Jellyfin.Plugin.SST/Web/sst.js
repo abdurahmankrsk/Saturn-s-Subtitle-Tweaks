@@ -645,7 +645,7 @@
             }
         });
 
-        // Check for any active video playback
+        // Check for any active video playback and inject OSD progress bar button
         var checkPlayback = function () {
             var isOsd = window.location.hash && (
                 window.location.hash.indexOf('videoosd') >= 0 ||
@@ -656,37 +656,69 @@
             var hasVideo = document.querySelector('video') !== null;
 
             if (isOsd || hasVideo) {
-                showFloatingButton();
+                injectOsdButton();
             } else {
-                hideFloatingButton();
+                var osdBtn = document.getElementById('sst-osd-btn');
+                if (osdBtn && osdBtn.parentNode) osdBtn.parentNode.removeChild(osdBtn);
             }
         };
 
-        setInterval(checkPlayback, 1000);
+        setInterval(checkPlayback, 500);
         checkPlayback();
     }
 
-    function showFloatingButton() {
-        if (document.getElementById('sst-floating-btn')) return;
+    function injectOsdButton() {
+        if (document.getElementById('sst-osd-btn')) return;
 
-        var btn = document.createElement('button');
-        btn.id = 'sst-floating-btn';
-        btn.className = 'sst-floating-btn';
-        btn.innerHTML = '<span style="font-size:24px;line-height:1;">🪐</span>';
-        btn.title = 'Saturn\'s Subtitle Tweaks (Alt + S)';
-        btn.style.cssText = 'position:fixed;bottom:80px;right:20px;z-index:999999;' +
-            'width:50px;height:50px;border-radius:50%;border:1px solid rgba(243,156,18,0.4);' +
-            'background:linear-gradient(135deg,rgba(0,164,220,0.95),rgba(108,92,231,0.95));' +
-            'color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;' +
-            'box-shadow:0 4px 16px rgba(0,0,0,0.6),0 0 16px rgba(108,92,231,0.4);';
+        var targetParent = null;
+        var referenceNode = null;
 
-        btn.addEventListener('click', showDialog);
-        document.body.appendChild(btn);
-    }
+        // 1. Right next to subtitle/audio/settings button in OSD bottom bar
+        var subBtn = document.querySelector('.btnSubtitles, .buttonSubtitles, [data-action="subtitles"], .btnAudio, .buttonAudio, .btnSettings, .buttonSettings');
+        if (subBtn && subBtn.parentNode) {
+            targetParent = subBtn.parentNode;
+            referenceNode = subBtn.nextSibling;
+        }
 
-    function hideFloatingButton() {
-        var btn = document.getElementById('sst-floating-btn');
-        if (btn && btn.parentNode) btn.parentNode.removeChild(btn);
+        // 2. Buttons container in OSD bottom progress bar
+        if (!targetParent) {
+            var osdContainer = document.querySelector('.videoOsdBottom .buttons, .videoOsdBottom, .osdBottomRow, .videoOsd .buttons, .osdControls, .videoPlayerContainer .buttons');
+            if (osdContainer) {
+                targetParent = osdContainer;
+                referenceNode = null;
+            }
+        }
+
+        if (targetParent) {
+            var btn = document.createElement('button');
+            btn.id = 'sst-osd-btn';
+            btn.className = 'btnOsd paper-icon-button-light sst-osd-btn autoSize';
+            btn.setAttribute('type', 'button');
+            btn.setAttribute('tabindex', '0');
+            btn.title = "Saturn's Subtitles (SST)";
+            btn.innerHTML = '<span class="sst-planet-icon" style="font-size:1.25em;line-height:1;">🪐</span>';
+
+            btn.addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                showDialog();
+            });
+
+            // TV Remote / D-Pad support
+            btn.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    showDialog();
+                }
+            });
+
+            if (referenceNode) {
+                targetParent.insertBefore(btn, referenceNode);
+            } else {
+                targetParent.appendChild(btn);
+            }
+        }
     }
 
     function setupPlaybackTracking() {

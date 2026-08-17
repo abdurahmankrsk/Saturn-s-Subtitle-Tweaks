@@ -451,38 +451,47 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   FLOATING BUTTON
+   IN-PROGRESS-BAR OSD BUTTON (Native Video Controls Integration)
    ═══════════════════════════════════════════════════════════════ */
 
-.sst-floating-btn {
-    position: fixed;
-    bottom: 80px;
-    right: 20px;
-    z-index: 9999;
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
-    border: 1px solid rgba(243, 156, 18, 0.35);
-    background: linear-gradient(135deg, rgba(0, 164, 220, 0.95), rgba(108, 92, 231, 0.95));
-    color: #fff;
+.sst-osd-btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: inherit;
+    font-size: 1.2em;
     cursor: pointer;
+    padding: 0.35em 0.5em;
+    margin: 0 0.2em;
+    border-radius: 50%;
+    transition: transform 0.15s ease, color 0.15s ease, background 0.15s ease;
+    vertical-align: middle;
+    outline: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.sst-osd-btn:hover,
+.sst-osd-btn:focus-visible,
+.sst-osd-btn:focus {
+    transform: scale(1.18);
+    background: rgba(255, 255, 255, 0.15);
+    color: #00a4dc;
+}
+
+.sst-osd-btn:active {
+    transform: scale(0.95);
+}
+
+.sst-osd-btn .sst-planet-icon {
+    font-size: 1.3em;
+    line-height: 1;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), 0 0 16px rgba(108, 92, 231, 0.4);
-    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), background 0.15s, opacity 0.15s;
-    opacity: 0.85;
-}
-
-.sst-floating-btn:hover {
-    opacity: 1;
-    transform: scale(1.12) rotate(15deg);
-    background: linear-gradient(135deg, rgba(0, 180, 240, 1), rgba(120, 100, 245, 1));
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6), 0 0 24px rgba(243, 156, 18, 0.5);
-}
-
-.sst-floating-btn .material-icons {
-    font-size: 24px;
+    filter: drop-shadow(0 0 4px rgba(243, 156, 18, 0.6));
 }
 
 /* ═══════════════════════════════════════════════════════════════

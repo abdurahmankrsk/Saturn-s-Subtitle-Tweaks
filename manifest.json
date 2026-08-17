@@ -9,20 +9,20 @@
     "imageUrl": "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST/Web/sst.css",
     "versions": [
       {
+        "version": "1.0.6.0",
+        "changelog": "Integrated SST button directly inside video player progress bar (slides/hides with OSD controls) and full TV remote D-Pad navigation.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST.zip",
+        "checksum": "35faf7611e727ea19456bf30a73d95e3",
+        "timestamp": "2026-08-17T21:30:00Z"
+      },
+      {
         "version": "1.0.5.0",
         "changelog": "Instant subtitle stream activation: automatically switches playback stream and injects HTML5 VTT track upon download.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST.zip",
-        "checksum": "28e47c703950d22976a878ab02a596ff",
+        "checksum": "35faf7611e727ea19456bf30a73d95e3",
         "timestamp": "2026-08-17T21:25:00Z"
-      },
-      {
-        "version": "1.0.4.0",
-        "changelog": "Auto-inject stylesheet, self-healing CSS inline fallbacks, window.SST.show() global helper, and Sessions API auto-discovery.",
-        "targetAbi": "10.11.0.0",
-        "sourceUrl": "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST.zip",
-        "checksum": "28e47c703950d22976a878ab02a596ff",
-        "timestamp": "2026-08-17T21:20:00Z"
       }
     ]
   }

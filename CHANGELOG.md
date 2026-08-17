@@ -2,6 +2,12 @@
 
 All notable changes to Saturn's Subtitle Tweaks (SST) will be documented in this file.
 
+## [1.0.6] - 2026-08-17
+
+### Added
+- Integrated the 🪐 SST button directly inside the video player progress bar and control bar row next to Subtitles/Settings (fades & slides down with the progress bar).
+- Full TV remote D-Pad navigation and focus styling for LG Smart TV (webOS), Samsung (Tizen), Google TV, EON TV, and Amazon Fire Stick.
+
 ## [1.0.5] - 2026-08-17
 
 ### Added
