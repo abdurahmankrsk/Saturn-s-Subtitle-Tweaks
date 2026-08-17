@@ -18,8 +18,8 @@ namespace Jellyfin.Plugin.SST;
 /// The injection adds a single script tag that loads SST's JS module.
 /// It is safe to run multiple times (idempotent) and can be reversed cleanly.
 ///
-/// Implemented as IHostedService (replacement for the deprecated IServerEntryPoint
-/// in Jellyfin 10.11+).
+/// Implemented as IHostedService. It gracefully catches any filesystem access
+/// errors (e.g. read-only filesystem or permissions) so it never causes server startup failure.
 /// </summary>
 public sealed partial class ScriptInjector : IHostedService, IDisposable
 {
@@ -46,14 +46,16 @@ public sealed partial class ScriptInjector : IHostedService, IDisposable
     /// <inheritdoc />
     public Task StartAsync(CancellationToken cancellationToken)
     {
+#pragma warning disable CA1031 // Do not catch general exception types - HostedService must never crash server startup
         try
         {
             InjectScript();
         }
-        catch (IOException ex)
+        catch (Exception ex)
         {
             LogInjectionFailed(_logger, ScriptTag, ex);
         }
+#pragma warning restore CA1031
 
         return Task.CompletedTask;
     }
@@ -61,14 +63,16 @@ public sealed partial class ScriptInjector : IHostedService, IDisposable
     /// <inheritdoc />
     public Task StopAsync(CancellationToken cancellationToken)
     {
+#pragma warning disable CA1031 // Do not catch general exception types
         try
         {
             RemoveScript();
         }
-        catch (IOException ex)
+        catch (Exception ex)
         {
             LogRemovalFailed(_logger, ex);
         }
+#pragma warning restore CA1031
 
         return Task.CompletedTask;
     }
@@ -172,7 +176,7 @@ public sealed partial class ScriptInjector : IHostedService, IDisposable
     // LoggerMessage delegates for high-performance structured logging
     // ═══════════════════════════════════════════════════════════════
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "SST: Failed to inject client script. The SST UI will not be available. You can manually add the following to your jellyfin-web index.html: {ScriptTag}")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "SST: Could not auto-inject client script into index.html due to file permissions. The server will start normally. For web client UI, you can add to jellyfin-web index.html or use custom CSS/JS: {ScriptTag}")]
     private static partial void LogInjectionFailed(ILogger logger, string scriptTag, Exception ex);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "SST: Failed to remove client script injection on shutdown")]
