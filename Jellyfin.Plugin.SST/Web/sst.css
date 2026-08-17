@@ -1,0 +1,592 @@
+/**
+ * Saturn's Subtitle Tweaks (SST) — Stylesheet
+ *
+ * Designed to match Jellyfin's native dark theme.
+ * Responsive for desktop, mobile, and TV interfaces.
+ */
+
+/* ═══════════════════════════════════════════════════════════════
+   DIALOG CONTAINER
+   ═══════════════════════════════════════════════════════════════ */
+
+.sst-dialog {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 99999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+}
+
+.sst-dialog.sst-dialog-open {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.sst-dialog-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.75);
+}
+
+.sst-dialog-content {
+    position: relative;
+    background: #1c1c1e;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 600px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    transform: translateY(20px) scale(0.97);
+    transition: transform 0.25s ease;
+    overflow: hidden;
+}
+
+.sst-dialog-open .sst-dialog-content {
+    transform: translateY(0) scale(1);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   DIALOG HEADER
+   ═══════════════════════════════════════════════════════════════ */
+
+.sst-dialog-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.sst-dialog-title {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #e0e0e0;
+}
+
+.sst-close-btn {
+    background: none;
+    border: none;
+    color: #888;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.15s, background 0.15s;
+}
+
+.sst-close-btn:hover,
+.sst-close-btn:focus {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   DIALOG BODY
+   ═══════════════════════════════════════════════════════════════ */
+
+.sst-dialog-body {
+    padding: 16px 20px;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+}
+
+.sst-media-info {
+    display: flex;
+    align-items: center;
+    font-size: 0.9rem;
+    color: #aaa;
+    margin-bottom: 16px;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 6px;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SEARCH CONTROLS
+   ═══════════════════════════════════════════════════════════════ */
+
+.sst-search-controls {
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+    margin-bottom: 16px;
+}
+
+.sst-language-row {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.sst-label {
+    font-size: 0.8rem;
+    color: #999;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.sst-select {
+    background: #2c2c2e;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    color: #e0e0e0;
+    padding: 10px 12px;
+    font-size: 0.95rem;
+    width: 100%;
+    cursor: pointer;
+    appearance: auto;
+    transition: border-color 0.15s;
+}
+
+.sst-select:hover,
+.sst-select:focus {
+    border-color: rgba(255, 255, 255, 0.3);
+    outline: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   BUTTONS
+   ═══════════════════════════════════════════════════════════════ */
+
+.sst-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    padding: 10px 16px;
+    transition: background 0.15s, transform 0.1s, opacity 0.15s;
+    white-space: nowrap;
+}
+
+.sst-btn:active {
+    transform: scale(0.97);
+}
+
+.sst-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.sst-btn-primary {
+    background: #00a4dc;
+    color: #fff;
+}
+
+.sst-btn-primary:hover:not(:disabled) {
+    background: #0091c4;
+}
+
+.sst-btn-download {
+    background: rgba(255, 255, 255, 0.08);
+    color: #e0e0e0;
+    padding: 6px 10px;
+    border-radius: 50%;
+    min-width: 36px;
+    min-height: 36px;
+}
+
+.sst-btn-download:hover:not(:disabled) {
+    background: #00a4dc;
+    color: #fff;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   STATUS MESSAGES
+   ═══════════════════════════════════════════════════════════════ */
+
+.sst-status {
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.sst-status-empty {
+    background: rgba(255, 255, 255, 0.04);
+    color: #aaa;
+}
+
+.sst-status-success {
+    background: rgba(76, 175, 80, 0.1);
+    color: #81c784;
+}
+
+.sst-status-error {
+    background: rgba(244, 67, 54, 0.1);
+    color: #ef9a9a;
+}
+
+.sst-status-hint {
+    display: block;
+    width: 100%;
+    font-size: 0.82rem;
+    color: #888;
+    margin-top: 4px;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SEARCH RESULTS
+   ═══════════════════════════════════════════════════════════════ */
+
+.sst-results {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.sst-result {
+    background: #2c2c2e;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+    padding: 12px 16px;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.sst-result:hover {
+    background: #3a3a3c;
+    border-color: rgba(255, 255, 255, 0.12);
+}
+
+.sst-result-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.sst-result-index {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    color: #999;
+    font-weight: 600;
+}
+
+.sst-result-title {
+    flex: 1;
+    font-size: 0.9rem;
+    color: #e0e0e0;
+    word-break: break-word;
+    line-height: 1.4;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   BADGES
+   ═══════════════════════════════════════════════════════════════ */
+
+.sst-result-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.sst-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.sst-badge-hash {
+    background: rgba(76, 175, 80, 0.15);
+    color: #81c784;
+}
+
+.sst-badge-forced {
+    background: rgba(255, 152, 0, 0.15);
+    color: #ffb74d;
+}
+
+.sst-badge-sdh {
+    background: rgba(33, 150, 243, 0.15);
+    color: #64b5f6;
+}
+
+.sst-badge-mt {
+    background: rgba(255, 87, 34, 0.15);
+    color: #ff8a65;
+}
+
+.sst-badge-ai {
+    background: rgba(156, 39, 176, 0.15);
+    color: #ce93d8;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   METADATA
+   ═══════════════════════════════════════════════════════════════ */
+
+.sst-result-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 8px;
+}
+
+.sst-meta-item {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.78rem;
+    color: #888;
+}
+
+.sst-meta-icon {
+    font-size: 0.85rem !important;
+    margin-right: 3px;
+    color: #666;
+}
+
+.sst-result-comment {
+    margin-top: 6px;
+    font-size: 0.8rem;
+    color: #777;
+    font-style: italic;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   OFFSET CONTROLS
+   ═══════════════════════════════════════════════════════════════ */
+
+.sst-dialog-footer {
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 12px 20px;
+}
+
+.sst-offset-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.sst-offset-label {
+    display: flex;
+    align-items: center;
+    font-size: 0.85rem;
+    color: #999;
+}
+
+#sst-offset-value {
+    font-weight: 600;
+    color: #e0e0e0;
+    margin-left: 4px;
+}
+
+.sst-offset-positive {
+    color: #81c784 !important;
+}
+
+.sst-offset-negative {
+    color: #ef9a9a !important;
+}
+
+.sst-offset-buttons {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.sst-btn-offset {
+    background: #2c2c2e;
+    color: #ccc;
+    padding: 8px 14px;
+    font-size: 0.82rem;
+    flex: 1;
+    min-width: 50px;
+}
+
+.sst-btn-offset:hover:not(:disabled) {
+    background: #3a3a3c;
+    color: #fff;
+}
+
+.sst-btn-reset {
+    background: rgba(0, 164, 220, 0.12);
+    color: #00a4dc;
+}
+
+.sst-btn-reset:hover:not(:disabled) {
+    background: rgba(0, 164, 220, 0.25);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   FLOATING BUTTON
+   ═══════════════════════════════════════════════════════════════ */
+
+.sst-floating-btn {
+    position: fixed;
+    bottom: 80px;
+    right: 20px;
+    z-index: 9999;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(0, 164, 220, 0.85);
+    color: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    transition: transform 0.15s, background 0.15s, opacity 0.15s;
+    opacity: 0.7;
+}
+
+.sst-floating-btn:hover {
+    opacity: 1;
+    transform: scale(1.1);
+    background: rgba(0, 164, 220, 1);
+}
+
+.sst-floating-btn .material-icons {
+    font-size: 24px;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   LOADING SPINNER
+   ═══════════════════════════════════════════════════════════════ */
+
+.sst-spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: sst-spin 0.6s linear infinite;
+}
+
+@keyframes sst-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   FIND SUBTITLES MENU BUTTON (injected into Jellyfin's menu)
+   ═══════════════════════════════════════════════════════════════ */
+
+.sst-find-btn {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 12px 16px;
+    text-align: left;
+    border: none;
+    background: transparent;
+    color: inherit;
+    font-size: inherit;
+    cursor: pointer;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    transition: background 0.15s;
+}
+
+.sst-find-btn:hover,
+.sst-find-btn:focus {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RESPONSIVE — MOBILE
+   ═══════════════════════════════════════════════════════════════ */
+
+@media (max-width: 600px) {
+    .sst-dialog-content {
+        width: 100%;
+        max-width: 100%;
+        max-height: 100vh;
+        border-radius: 0;
+        height: 100%;
+    }
+
+    .sst-search-controls {
+        flex-direction: column;
+    }
+
+    .sst-btn-primary {
+        width: 100%;
+    }
+
+    .sst-offset-buttons {
+        justify-content: center;
+    }
+
+    .sst-floating-btn {
+        bottom: 120px;
+        right: 12px;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RESPONSIVE — TV / LARGE SCREENS
+   ═══════════════════════════════════════════════════════════════ */
+
+@media (min-width: 1200px) {
+    .sst-dialog-content {
+        max-width: 700px;
+    }
+
+    .sst-btn {
+        padding: 12px 20px;
+        font-size: 1rem;
+    }
+
+    .sst-btn-offset {
+        padding: 12px 18px;
+        font-size: 0.9rem;
+    }
+
+    .sst-result {
+        padding: 16px 20px;
+    }
+
+    .sst-result-title {
+        font-size: 1rem;
+    }
+}
+
+/* TV focus styles for remote navigation */
+@media (pointer: coarse) and (min-width: 800px) {
+    .sst-btn:focus,
+    .sst-result:focus {
+        outline: 3px solid #00a4dc;
+        outline-offset: 2px;
+    }
+
+    .sst-btn-offset {
+        min-height: 48px;
+        font-size: 1rem;
+    }
+}
