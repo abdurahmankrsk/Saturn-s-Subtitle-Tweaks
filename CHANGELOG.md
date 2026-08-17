@@ -2,6 +2,12 @@
 
 All notable changes to Saturn's Subtitle Tweaks (SST) will be documented in this file.
 
+## [1.0.1] - 2026-08-17
+
+### Fixed
+- Fixed unhandled `UnauthorizedAccessException` when injecting scripts on Windows installations without administrative access to `C:\Program Files\Jellyfin\Server\jellyfin-web\index.html`.
+- Made script injection non-fatal and non-blocking during server startup.
+
 ## [1.0.0] - 2026-08-17
 
 ### Added
