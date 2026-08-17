@@ -9,20 +9,20 @@
     "imageUrl": "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST/Web/sst.css",
     "versions": [
       {
+        "version": "1.0.2.0",
+        "changelog": "In-memory client script injection via FileTransformation plugin; automatic injection without modifying disk files.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST.zip",
+        "checksum": "402d1d572b7099213d024cbf45f9d84f",
+        "timestamp": "2026-08-17T21:00:00Z"
+      },
+      {
         "version": "1.0.1.0",
         "changelog": "Fix file permission crash when running without administrative access to Program Files index.html; safe hosted service startup.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST.zip",
-        "checksum": "46ab830b42e1fa9086df26d3db4e10dc",
+        "checksum": "402d1d572b7099213d024cbf45f9d84f",
         "timestamp": "2026-08-17T20:50:00Z"
-      },
-      {
-        "version": "1.0.0.0",
-        "changelog": "Initial release of Saturn's Subtitle Tweaks (SST) v1.0.0",
-        "targetAbi": "10.11.0.0",
-        "sourceUrl": "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST.zip",
-        "checksum": "46ab830b42e1fa9086df26d3db4e10dc",
-        "timestamp": "2026-08-17T18:00:00Z"
       }
     ]
   }

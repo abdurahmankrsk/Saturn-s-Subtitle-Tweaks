@@ -2,6 +2,11 @@
 
 All notable changes to Saturn's Subtitle Tweaks (SST) will be documented in this file.
 
+## [1.0.2] - 2026-08-17
+
+### Added
+- Direct integration with `Jellyfin.Plugin.FileTransformation` for in-memory script and stylesheet injection into web clients without modifying files on disk.
+
 ## [1.0.1] - 2026-08-17
 
 ### Fixed

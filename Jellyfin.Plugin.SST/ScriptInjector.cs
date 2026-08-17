@@ -1,7 +1,9 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using MediaBrowser.Common.Configuration;
@@ -12,14 +14,8 @@ namespace Jellyfin.Plugin.SST;
 
 /// <summary>
 /// Handles injecting the SST script tag into jellyfin-web's index.html.
-/// This follows the established pattern used by community plugins like Jellyscrub
-/// and Intro Skipper for injecting client-side scripts.
-///
-/// The injection adds a single script tag that loads SST's JS module.
-/// It is safe to run multiple times (idempotent) and can be reversed cleanly.
-///
-/// Implemented as IHostedService. It gracefully catches any filesystem access
-/// errors (e.g. read-only filesystem or permissions) so it never causes server startup failure.
+/// Supports both direct file patching and in-memory transformation via the
+/// FileTransformation plugin.
 /// </summary>
 public sealed partial class ScriptInjector : IHostedService, IDisposable
 {
@@ -46,9 +42,13 @@ public sealed partial class ScriptInjector : IHostedService, IDisposable
     /// <inheritdoc />
     public Task StartAsync(CancellationToken cancellationToken)
     {
-#pragma warning disable CA1031 // Do not catch general exception types - HostedService must never crash server startup
+#pragma warning disable CA1031 // Do not catch general exception types
         try
         {
+            // First attempt to register with FileTransformation plugin (in-memory, no permission issues)
+            RegisterWithFileTransformation();
+
+            // Also attempt direct file injection if possible
             InjectScript();
         }
         catch (Exception ex)
@@ -81,6 +81,78 @@ public sealed partial class ScriptInjector : IHostedService, IDisposable
     public void Dispose()
     {
         // No unmanaged resources to dispose.
+    }
+
+    /// <summary>
+    /// Callback invoked by the FileTransformation plugin when index.html is served.
+    /// </summary>
+    /// <param name="jsonPayload">The JSON payload from FileTransformation.</param>
+    /// <returns>The modified JSON payload.</returns>
+    public static string TransformFile(string jsonPayload)
+    {
+#pragma warning disable CA1031
+        try
+        {
+            using var doc = JsonDocument.Parse(jsonPayload);
+            if (doc.RootElement.TryGetProperty("contents", out var contentsProp))
+            {
+                var content = contentsProp.GetString() ?? string.Empty;
+                if (!content.Contains(InjectionMarker, StringComparison.Ordinal))
+                {
+                    var headClose = content.LastIndexOf("</head>", StringComparison.OrdinalIgnoreCase);
+                    if (headClose >= 0)
+                    {
+                        var injection = $"\n    {InjectionMarker}\n    {StyleTag}\n    {ScriptTag}\n    ";
+                        content = content.Insert(headClose, injection);
+                    }
+                }
+
+                return JsonSerializer.Serialize(new { contents = content });
+            }
+        }
+        catch
+        {
+            // Graceful fallback to unmodified payload
+        }
+#pragma warning restore CA1031
+
+        return jsonPayload;
+    }
+
+    private void RegisterWithFileTransformation()
+    {
+#pragma warning disable CA1031
+        try
+        {
+            var assemblies = AppDomain.CurrentDomain.GetAssemblies();
+            var ftAssembly = assemblies.FirstOrDefault(a =>
+                a.GetName().Name?.Equals("Jellyfin.Plugin.FileTransformation", StringComparison.OrdinalIgnoreCase) == true);
+
+            if (ftAssembly is not null)
+            {
+                var pluginInterfaceType = ftAssembly.GetType("Jellyfin.Plugin.FileTransformation.PluginInterface");
+                if (pluginInterfaceType is not null)
+                {
+                    var payload = JsonSerializer.Serialize(new
+                    {
+                        id = Guid.Parse("b3a1c2d4-e5f6-4a89-9bcd-1234567890ab"),
+                        fileNamePattern = "index\\.html",
+                        callbackAssembly = typeof(ScriptInjector).Assembly.GetName().Name,
+                        callbackClass = typeof(ScriptInjector).FullName,
+                        callbackMethod = nameof(TransformFile)
+                    });
+
+                    var registerMethod = pluginInterfaceType.GetMethod("RegisterTransformation", BindingFlags.Public | BindingFlags.Static);
+                    registerMethod?.Invoke(null, new object?[] { payload });
+                    LogFileTransformationSuccess(_logger);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            LogFileTransformationFailed(_logger, ex);
+        }
+#pragma warning restore CA1031
     }
 
     private void InjectScript()
@@ -196,4 +268,10 @@ public sealed partial class ScriptInjector : IHostedService, IDisposable
 
     [LoggerMessage(Level = LogLevel.Information, Message = "SST: Removed client script injection from {IndexPath}")]
     private static partial void LogRemovalSuccess(ILogger logger, string indexPath);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "SST: Successfully registered transformation with FileTransformation plugin")]
+    private static partial void LogFileTransformationSuccess(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "SST: FileTransformation reflection registration skipped or failed")]
+    private static partial void LogFileTransformationFailed(ILogger logger, Exception ex);
 }
