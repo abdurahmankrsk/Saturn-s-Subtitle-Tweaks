@@ -9,20 +9,20 @@
     "imageUrl": "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST/Web/sst.css",
     "versions": [
       {
+        "version": "1.0.10.0",
+        "changelog": "Hook into main.jellyfin.bundle.js and runtime.bundle.js via FileTransformation for guaranteed universal script execution.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST.zip",
+        "checksum": "4cc3a1863b9fe78cef833e8e0d907b73",
+        "timestamp": "2026-08-17T21:50:00Z"
+      },
+      {
         "version": "1.0.9.0",
         "changelog": "Direct sibling insertion next to closed_caption icon in video controls; eliminated container class dependencies.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST.zip",
-        "checksum": "cb57ed349724abcdbdc1a6316af5c3e9",
+        "checksum": "4cc3a1863b9fe78cef833e8e0d907b73",
         "timestamp": "2026-08-17T21:45:00Z"
-      },
-      {
-        "version": "1.0.8.0",
-        "changelog": "Fix button placement: strictly scoped to in-player video OSD next to CC button, eliminated sidebar drawer placement.",
-        "targetAbi": "10.11.0.0",
-        "sourceUrl": "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST.zip",
-        "checksum": "cb57ed349724abcdbdc1a6316af5c3e9",
-        "timestamp": "2026-08-17T21:40:00Z"
       }
     ]
   }

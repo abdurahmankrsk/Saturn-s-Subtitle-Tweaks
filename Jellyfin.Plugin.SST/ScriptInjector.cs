@@ -13,7 +13,7 @@ using Microsoft.Extensions.Logging;
 namespace Jellyfin.Plugin.SST;
 
 /// <summary>
-/// Handles injecting the SST script tag into jellyfin-web's index.html.
+/// Handles injecting the SST script tag into jellyfin-web's index.html and main.jellyfin.bundle.js.
 /// Integrates with the FileTransformation plugin via reflection across all AssemblyLoadContexts
 /// so that scripts and styles are automatically loaded on every client (browser, mobile, TV)
 /// without modifying files on disk.
@@ -27,6 +27,7 @@ public sealed partial class ScriptInjector : IHostedService, IDisposable
     private const string ScriptTag = "<script src=\"/sst/ClientScript\" defer></script>";
     private const string StyleTag = "<link rel=\"stylesheet\" href=\"/sst/ClientStyle\" />";
     private const string InjectionMarker = "<!-- SST -->";
+    private const string JsLoaderMarker = "/* SST-LOADER */";
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ScriptInjector"/> class.
@@ -94,7 +95,7 @@ public sealed partial class ScriptInjector : IHostedService, IDisposable
     }
 
     /// <summary>
-    /// Callback invoked by the FileTransformation plugin when index.html is served.
+    /// Callback invoked by the FileTransformation plugin when web assets are served.
     /// </summary>
     /// <param name="payload">The payload object (or string) passed by FileTransformation.</param>
     /// <returns>The transformed payload object or string.</returns>
@@ -110,7 +111,7 @@ public sealed partial class ScriptInjector : IHostedService, IDisposable
         {
             if (payload is string str)
             {
-                return InjectHtml(str);
+                return InjectContent(str);
             }
 
             var type = payload.GetType();
@@ -118,7 +119,7 @@ public sealed partial class ScriptInjector : IHostedService, IDisposable
             if (prop != null)
             {
                 var content = prop.GetValue(payload)?.ToString() ?? string.Empty;
-                var modified = InjectHtml(content);
+                var modified = InjectContent(content);
                 prop.SetValue(payload, modified);
                 return payload;
             }
@@ -132,18 +133,28 @@ public sealed partial class ScriptInjector : IHostedService, IDisposable
         return payload;
     }
 
-    private static string InjectHtml(string content)
+    private static string InjectContent(string content)
     {
-        if (content.Contains(InjectionMarker, StringComparison.Ordinal))
+        // Handle HTML files (index.html)
+        if (content.Contains("</head>", StringComparison.OrdinalIgnoreCase))
         {
+            if (!content.Contains(InjectionMarker, StringComparison.Ordinal))
+            {
+                var headClose = content.LastIndexOf("</head>", StringComparison.OrdinalIgnoreCase);
+                if (headClose >= 0)
+                {
+                    var injection = $"\n    {InjectionMarker}\n    {StyleTag}\n    {ScriptTag}\n    ";
+                    return content.Insert(headClose, injection);
+                }
+            }
             return content;
         }
 
-        var headClose = content.LastIndexOf("</head>", StringComparison.OrdinalIgnoreCase);
-        if (headClose >= 0)
+        // Handle JS bundle files (main.jellyfin.bundle.js)
+        if (!content.Contains(JsLoaderMarker, StringComparison.Ordinal))
         {
-            var injection = $"\n    {InjectionMarker}\n    {StyleTag}\n    {ScriptTag}\n    ";
-            return content.Insert(headClose, injection);
+            var jsLoader = $"\n{JsLoaderMarker}\n;(function(){{if(!document.getElementById('sst-script')){{var s=document.createElement('script');s.id='sst-script';s.src='/sst/ClientScript';s.defer=true;document.head.appendChild(s);var c=document.createElement('link');c.id='sst-style';c.rel='stylesheet';c.href='/sst/ClientStyle';document.head.appendChild(c);}}}})();\n";
+            return content + jsLoader;
         }
 
         return content;
@@ -170,7 +181,8 @@ public sealed partial class ScriptInjector : IHostedService, IDisposable
                     var registerMethod = pluginInterfaceType.GetMethod("RegisterTransformation", BindingFlags.Public | BindingFlags.Static);
                     if (registerMethod is not null)
                     {
-                        var payload = new
+                        // 1. Register for index.html
+                        var payloadHtml = new
                         {
                             id = Guid.Parse("b3a1c2d4-e5f6-4a89-9bcd-1234567890ab"),
                             fileNamePattern = ".*index\\.html.*",
@@ -178,8 +190,30 @@ public sealed partial class ScriptInjector : IHostedService, IDisposable
                             callbackClass = typeof(ScriptInjector).FullName,
                             callbackMethod = nameof(TransformFile)
                         };
+                        registerMethod.Invoke(null, new object?[] { payloadHtml });
 
-                        registerMethod.Invoke(null, new object?[] { payload });
+                        // 2. Register for main.jellyfin.bundle.js
+                        var payloadBundle = new
+                        {
+                            id = Guid.Parse("c4b2d3e5-f6a7-4b90-8cde-2345678901bc"),
+                            fileNamePattern = ".*main\\.jellyfin\\.bundle\\.js.*",
+                            callbackAssembly = typeof(ScriptInjector).Assembly.FullName,
+                            callbackClass = typeof(ScriptInjector).FullName,
+                            callbackMethod = nameof(TransformFile)
+                        };
+                        registerMethod.Invoke(null, new object?[] { payloadBundle });
+
+                        // 3. Register for runtime.bundle.js
+                        var payloadRuntime = new
+                        {
+                            id = Guid.Parse("d5c3e4f6-a7b8-4c91-9def-3456789012cd"),
+                            fileNamePattern = ".*runtime\\.bundle\\.js.*",
+                            callbackAssembly = typeof(ScriptInjector).Assembly.FullName,
+                            callbackClass = typeof(ScriptInjector).FullName,
+                            callbackMethod = nameof(TransformFile)
+                        };
+                        registerMethod.Invoke(null, new object?[] { payloadRuntime });
+
                         _fileTransformationRegistered = true;
                         LogFileTransformationSuccess(_logger);
                     }

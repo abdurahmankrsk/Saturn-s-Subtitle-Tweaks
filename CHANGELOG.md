@@ -2,6 +2,11 @@
 
 All notable changes to Saturn's Subtitle Tweaks (SST) will be documented in this file.
 
+## [1.0.10] - 2026-08-17
+
+### Added
+- Hooked into `main.jellyfin.bundle.js` and `runtime.bundle.js` via FileTransformation for guaranteed universal script execution on all web clients.
+
 ## [1.0.9] - 2026-08-17
 
 ### Fixed
