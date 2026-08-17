@@ -438,9 +438,17 @@
             button.title = 'Downloaded successfully';
 
             var statusEl = dialog.querySelector('#sst-status');
-            statusEl.innerHTML = '✅ Subtitle downloaded! Available in your subtitle tracks.';
+            statusEl.innerHTML = '✅ Subtitle downloaded! Activating track...';
             statusEl.className = 'sst-status sst-status-success';
             statusEl.style.display = 'block';
+
+            // Wait a moment for server to finish file association
+            await new Promise(function (resolve) { setTimeout(resolve, 600); });
+
+            // Activate the subtitle track dynamically
+            await activateNewSubtitleTrack(itemId);
+
+            statusEl.innerHTML = '✅ Subtitle is now active & playing on screen!';
         } catch (error) {
             button.disabled = false;
             button.innerHTML = originalHtml;
@@ -449,6 +457,73 @@
             statusEl.innerHTML = '❌ Download failed: ' + escapeHtml(errorMessage);
             statusEl.className = 'sst-status sst-status-error';
             statusEl.style.display = 'block';
+        }
+    }
+
+    async function activateNewSubtitleTrack(itemId) {
+        var api = getApiClient();
+        if (!api) return;
+
+        try {
+            var userId = api.getCurrentUserId ? api.getCurrentUserId() : '';
+            var item = await api.getItem(userId, itemId);
+            if (!item || !item.MediaStreams) return;
+
+            var subStreams = item.MediaStreams.filter(function (s) { return s.Type === 'Subtitle'; });
+            if (!subStreams.length) return;
+
+            var latestSub = subStreams[subStreams.length - 1];
+            var streamIndex = latestSub.Index;
+
+            // 1. Tell PlaybackManager to switch to this subtitle track
+            var pbm = getPlaybackManager();
+            if (pbm) {
+                try {
+                    if (typeof pbm.currentMediaSource === 'function') {
+                        var ms = pbm.currentMediaSource();
+                        if (ms) ms.MediaStreams = item.MediaStreams;
+                    }
+                    if (typeof pbm.setSubtitleStreamIndex === 'function') {
+                        pbm.setSubtitleStreamIndex(streamIndex);
+                    }
+                } catch (e) {
+                    console.debug('[SST] PlaybackManager stream switch error:', e);
+                }
+            }
+
+            // 2. Direct HTML5 track injection into video element
+            var video = document.querySelector('video');
+            if (video) {
+                if (video.textTracks) {
+                    for (var i = 0; i < video.textTracks.length; i++) {
+                        video.textTracks[i].mode = 'disabled';
+                    }
+                }
+
+                var oldSstTracks = video.querySelectorAll('.sst-injected-track');
+                for (var j = 0; j < oldSstTracks.length; j++) {
+                    oldSstTracks[j].parentNode.removeChild(oldSstTracks[j]);
+                }
+
+                var mediaSourceId = currentMediaSourceId || itemId;
+                var trackUrl = api.getUrl('/Videos/' + itemId + '/' + mediaSourceId + '/Subtitles/' + streamIndex + '/Stream.vtt');
+
+                var track = document.createElement('track');
+                track.className = 'sst-injected-track';
+                track.kind = 'subtitles';
+                track.label = latestSub.DisplayTitle || latestSub.Language || 'Subtitles';
+                track.srclang = latestSub.Language || 'en';
+                track.src = trackUrl;
+                track.default = true;
+
+                video.appendChild(track);
+                track.mode = 'showing';
+                if (track.track) {
+                    track.track.mode = 'showing';
+                }
+            }
+        } catch (e) {
+            console.debug('[SST] Error activating subtitle track:', e);
         }
     }
 

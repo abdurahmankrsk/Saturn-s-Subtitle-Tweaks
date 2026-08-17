@@ -2,6 +2,11 @@
 
 All notable changes to Saturn's Subtitle Tweaks (SST) will be documented in this file.
 
+## [1.0.5] - 2026-08-17
+
+### Added
+- Instant subtitle stream activation: automatically queries updated item `MediaStreams` and switches active player track via `playbackManager` + dynamic HTML5 `<track>` element.
+
 ## [1.0.4] - 2026-08-17
 
 ### Added
