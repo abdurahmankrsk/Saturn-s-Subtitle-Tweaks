@@ -2,6 +2,13 @@
 
 All notable changes to Saturn's Subtitle Tweaks (SST) will be documented in this file.
 
+## [1.0.3] - 2026-08-17
+
+### Added
+- Added `Alt + S` global keyboard shortcut to open SST Subtitle Search anytime video is playing.
+- Added multi-ALC assembly discovery for `Jellyfin.Plugin.FileTransformation` across isolated plugin load contexts.
+- Added dual injection hooks into both `index.html` and `main.jellyfin.bundle.js`.
+
 ## [1.0.2] - 2026-08-17
 
 ### Added

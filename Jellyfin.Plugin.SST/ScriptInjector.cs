@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.Loader;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -13,18 +14,22 @@ using Microsoft.Extensions.Logging;
 namespace Jellyfin.Plugin.SST;
 
 /// <summary>
-/// Handles injecting the SST script tag into jellyfin-web's index.html.
-/// Supports both direct file patching and in-memory transformation via the
-/// FileTransformation plugin.
+/// Handles injecting the SST script tag into jellyfin-web's index.html and main.jellyfin.bundle.js.
+/// Uses multiple redundant strategies:
+/// 1. FileTransformation plugin in-memory registration (works across all AssemblyLoadContexts)
+/// 2. AssemblyLoad event listener for when FileTransformation loads after SST
+/// 3. Direct index.html file patching when permissions allow
 /// </summary>
 public sealed partial class ScriptInjector : IHostedService, IDisposable
 {
     private readonly ILogger<ScriptInjector> _logger;
     private readonly IApplicationPaths _appPaths;
+    private bool _fileTransformationRegistered;
 
     private const string ScriptTag = "<script src=\"/sst/ClientScript\" defer></script>";
     private const string StyleTag = "<link rel=\"stylesheet\" href=\"/sst/ClientStyle\" />";
     private const string InjectionMarker = "<!-- SST -->";
+    private const string BundleInjectionMarker = "/* SST-INJECT */";
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ScriptInjector"/> class.
@@ -45,10 +50,13 @@ public sealed partial class ScriptInjector : IHostedService, IDisposable
 #pragma warning disable CA1031 // Do not catch general exception types
         try
         {
-            // First attempt to register with FileTransformation plugin (in-memory, no permission issues)
+            // 1. Hook AssemblyLoad event in case FileTransformation is loaded later
+            AppDomain.CurrentDomain.AssemblyLoad += OnAssemblyLoad;
+
+            // 2. Try registering with FileTransformation immediately across all AssemblyLoadContexts
             RegisterWithFileTransformation();
 
-            // Also attempt direct file injection if possible
+            // 3. Try direct file injection if filesystem permissions allow
             InjectScript();
         }
         catch (Exception ex)
@@ -63,9 +71,10 @@ public sealed partial class ScriptInjector : IHostedService, IDisposable
     /// <inheritdoc />
     public Task StopAsync(CancellationToken cancellationToken)
     {
-#pragma warning disable CA1031 // Do not catch general exception types
+#pragma warning disable CA1031
         try
         {
+            AppDomain.CurrentDomain.AssemblyLoad -= OnAssemblyLoad;
             RemoveScript();
         }
         catch (Exception ex)
@@ -80,11 +89,20 @@ public sealed partial class ScriptInjector : IHostedService, IDisposable
     /// <inheritdoc />
     public void Dispose()
     {
-        // No unmanaged resources to dispose.
+        AppDomain.CurrentDomain.AssemblyLoad -= OnAssemblyLoad;
+    }
+
+    private void OnAssemblyLoad(object? sender, AssemblyLoadEventArgs args)
+    {
+        if (!_fileTransformationRegistered &&
+            args.LoadedAssembly.GetName().Name?.Contains("FileTransformation", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            RegisterWithFileTransformation();
+        }
     }
 
     /// <summary>
-    /// Callback invoked by the FileTransformation plugin when index.html is served.
+    /// Callback invoked by the FileTransformation plugin when web assets are served.
     /// </summary>
     /// <param name="jsonPayload">The JSON payload from FileTransformation.</param>
     /// <returns>The modified JSON payload.</returns>
@@ -97,14 +115,25 @@ public sealed partial class ScriptInjector : IHostedService, IDisposable
             if (doc.RootElement.TryGetProperty("contents", out var contentsProp))
             {
                 var content = contentsProp.GetString() ?? string.Empty;
-                if (!content.Contains(InjectionMarker, StringComparison.Ordinal))
+
+                // Handle index.html
+                if (content.Contains("</head>", StringComparison.OrdinalIgnoreCase))
                 {
-                    var headClose = content.LastIndexOf("</head>", StringComparison.OrdinalIgnoreCase);
-                    if (headClose >= 0)
+                    if (!content.Contains(InjectionMarker, StringComparison.Ordinal))
                     {
-                        var injection = $"\n    {InjectionMarker}\n    {StyleTag}\n    {ScriptTag}\n    ";
-                        content = content.Insert(headClose, injection);
+                        var headClose = content.LastIndexOf("</head>", StringComparison.OrdinalIgnoreCase);
+                        if (headClose >= 0)
+                        {
+                            var injection = $"\n    {InjectionMarker}\n    {StyleTag}\n    {ScriptTag}\n    ";
+                            content = content.Insert(headClose, injection);
+                        }
                     }
+                }
+                // Handle main.jellyfin.bundle.js
+                else if (!content.Contains(BundleInjectionMarker, StringComparison.Ordinal))
+                {
+                    var jsInjection = $"\n{BundleInjectionMarker}\n;(function(){{if(!document.getElementById('sst-script')){{var s=document.createElement('script');s.id='sst-script';s.src='/sst/ClientScript';s.defer=true;document.head.appendChild(s);var c=document.createElement('link');c.rel='stylesheet';c.href='/sst/ClientStyle';document.head.appendChild(c);}}}})();\n";
+                    content += jsInjection;
                 }
 
                 return JsonSerializer.Serialize(new { contents = content });
@@ -112,7 +141,7 @@ public sealed partial class ScriptInjector : IHostedService, IDisposable
         }
         catch
         {
-            // Graceful fallback to unmodified payload
+            // Fallback to unmodified payload
         }
 #pragma warning restore CA1031
 
@@ -124,7 +153,12 @@ public sealed partial class ScriptInjector : IHostedService, IDisposable
 #pragma warning disable CA1031
         try
         {
-            var assemblies = AppDomain.CurrentDomain.GetAssemblies();
+            // Search all AssemblyLoadContexts for FileTransformation
+            var assemblies = AssemblyLoadContext.All
+                .SelectMany(alc => alc.Assemblies)
+                .Concat(AppDomain.CurrentDomain.GetAssemblies())
+                .Distinct();
+
             var ftAssembly = assemblies.FirstOrDefault(a =>
                 a.GetName().Name?.Equals("Jellyfin.Plugin.FileTransformation", StringComparison.OrdinalIgnoreCase) == true);
 
@@ -133,18 +167,34 @@ public sealed partial class ScriptInjector : IHostedService, IDisposable
                 var pluginInterfaceType = ftAssembly.GetType("Jellyfin.Plugin.FileTransformation.PluginInterface");
                 if (pluginInterfaceType is not null)
                 {
-                    var payload = JsonSerializer.Serialize(new
-                    {
-                        id = Guid.Parse("b3a1c2d4-e5f6-4a89-9bcd-1234567890ab"),
-                        fileNamePattern = "index\\.html",
-                        callbackAssembly = typeof(ScriptInjector).Assembly.GetName().Name,
-                        callbackClass = typeof(ScriptInjector).FullName,
-                        callbackMethod = nameof(TransformFile)
-                    });
-
                     var registerMethod = pluginInterfaceType.GetMethod("RegisterTransformation", BindingFlags.Public | BindingFlags.Static);
-                    registerMethod?.Invoke(null, new object?[] { payload });
-                    LogFileTransformationSuccess(_logger);
+                    if (registerMethod is not null)
+                    {
+                        // Register for index.html
+                        var payloadIndex = JsonSerializer.Serialize(new
+                        {
+                            id = Guid.Parse("b3a1c2d4-e5f6-4a89-9bcd-1234567890ab"),
+                            fileNamePattern = ".*index\\.html.*",
+                            callbackAssembly = typeof(ScriptInjector).Assembly.GetName().Name,
+                            callbackClass = typeof(ScriptInjector).FullName,
+                            callbackMethod = nameof(TransformFile)
+                        });
+                        registerMethod.Invoke(null, new object?[] { payloadIndex });
+
+                        // Register for main.jellyfin.bundle.js as backup
+                        var payloadBundle = JsonSerializer.Serialize(new
+                        {
+                            id = Guid.Parse("c4b2d3e5-f6a7-4b90-8cde-2345678901bc"),
+                            fileNamePattern = ".*main\\.jellyfin\\.bundle\\.js.*",
+                            callbackAssembly = typeof(ScriptInjector).Assembly.GetName().Name,
+                            callbackClass = typeof(ScriptInjector).FullName,
+                            callbackMethod = nameof(TransformFile)
+                        });
+                        registerMethod.Invoke(null, new object?[] { payloadBundle });
+
+                        _fileTransformationRegistered = true;
+                        LogFileTransformationSuccess(_logger);
+                    }
                 }
             }
         }
@@ -172,7 +222,6 @@ public sealed partial class ScriptInjector : IHostedService, IDisposable
             return;
         }
 
-        // Inject before </head>
         var headClose = html.LastIndexOf("</head>", StringComparison.OrdinalIgnoreCase);
         if (headClose < 0)
         {
@@ -202,7 +251,6 @@ public sealed partial class ScriptInjector : IHostedService, IDisposable
             return;
         }
 
-        // Remove the entire injection block
         var lines = html.Split('\n').ToList();
         var markerIndex = lines.FindIndex(l => l.Contains(InjectionMarker, StringComparison.Ordinal));
         if (markerIndex >= 0)

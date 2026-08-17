@@ -770,31 +770,49 @@
      * the subtitle menu.
      */
     function setupPlaybackButton() {
+        // Keyboard shortcut: Alt+S opens subtitle search
+        document.addEventListener('keydown', function (e) {
+            if (e.altKey && (e.key === 's' || e.key === 'S')) {
+                e.preventDefault();
+                showDialog();
+            }
+        });
+
         // Listen for playback start/stop to show/hide the button
         document.addEventListener('viewshow', function (e) {
             var target = e.target || e.detail;
-            if (target && target.id === 'videoOsdPage') {
+            if (target && (target.id === 'videoOsdPage' || target.classList?.contains('videoPlayerContainer'))) {
                 showFloatingButton();
             }
         });
 
-        // Also try to detect OSD page via URL
+        // Check for any active video playback
         var checkPlayback = function () {
             var isOsd = window.location.hash && (
                 window.location.hash.indexOf('videoosd') >= 0 ||
-                window.location.hash.indexOf('video') >= 0
+                window.location.hash.indexOf('video') >= 0 ||
+                window.location.pathname.indexOf('video') >= 0 ||
+                window.location.pathname.indexOf('playback') >= 0
             );
-            var isPlaying = document.querySelector('.videoPlayerContainer video');
+            var hasVideo = document.querySelector('video') !== null;
+            var isPlaying = false;
+            try {
+                var pbm = getPlaybackManager();
+                if (pbm) {
+                    isPlaying = (typeof pbm.isPlaying === 'function' && pbm.isPlaying()) ||
+                                (typeof pbm.currentItem === 'function' && pbm.currentItem() !== null);
+                }
+            } catch (err) {}
 
-            if (isOsd || isPlaying) {
+            if (isOsd || hasVideo || isPlaying) {
                 showFloatingButton();
             } else {
                 hideFloatingButton();
             }
         };
 
-        // Periodic check as a fallback
-        setInterval(checkPlayback, 2000);
+        // Periodic check
+        setInterval(checkPlayback, 1000);
     }
 
     /**
