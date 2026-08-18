@@ -2,6 +2,11 @@
 
 All notable changes to Saturn's Subtitle Tweaks (SST) will be documented in this file.
 
+## [1.3.9] - 2026-08-18
+
+### Fixed
+- SST no longer runs on every Jellyfin request (API / Google TV / sessions). That wrapping could take the server down on plugin update.
+
 ## [1.3.8] - 2026-08-18
 
 ### Fixed
