@@ -674,3 +674,12 @@
         font-size: 1rem;
     }
 }
+
+.actionSheet.sst-cc-constrained {
+    overflow: hidden;
+}
+
+.actionSheet.sst-cc-constrained .actionSheetScroller {
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+}
