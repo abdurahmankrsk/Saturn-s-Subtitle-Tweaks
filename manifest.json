@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST/Web/icon.png",
     "versions": [
       {
-        "version": "1.3.1.0",
-        "changelog": "Stop leftover File Transformation and index.html disk writes that could crash the Jellyfin server.",
+        "version": "1.3.2.0",
+        "changelog": "Apply only the downloaded subtitle, keep the CC menu attached to the player, and speed up apply.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST.zip",
-        "checksum": "5684ed6db92f0fdabc011d292834180e",
-        "timestamp": "2026-08-18T15:44:50Z"
+        "checksum": "b1f18c6a8cd3ebee4f789e5b74763d0a",
+        "timestamp": "2026-08-18T16:39:43Z"
       }
     ]
   }
