@@ -714,6 +714,18 @@ html.layout-tv .actionSheetMenuItem.sst-offset-item:focus {
     outline-offset: 2px;
 }
 
+.sst-osd-glyph {
+    display: inline-block;
+    font-size: 1.15rem;
+    line-height: 1;
+    pointer-events: none;
+}
+
+.videoOsdBottom .sst-osd-find,
+.videoOsdBottom .sst-osd-offset {
+    min-width: 40px;
+}
+
 .actionSheet.sst-cc-constrained {
     overflow: hidden;
 }
