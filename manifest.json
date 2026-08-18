@@ -2,19 +2,19 @@
   {
     "guid": "b3a1c2d4-e5f6-4a89-9bcd-1234567890ab",
     "name": "Saturn's Subtitle Tweaks",
-    "description": "Saturn's Subtitle Tweaks (SST) adds Find subtitles to the Jellyfin Web playback subtitle menu. v1.1.2.0 injects the client script into /web/index.html so the button can appear during playback.",
-    "overview": "In-player subtitle search for Jellyfin Web.",
+    "description": "Saturn's Subtitle Tweaks (SST) adds Find subtitles to the Jellyfin Web playback menu: search remote subtitles, download through Jellyfin providers, and apply a temporary timing offset for the current playback only.",
+    "overview": "In-player subtitle search, download, and session-only timing for Jellyfin Web.",
     "owner": "abdurahmankrsk",
     "category": "Subtitles",
     "imageUrl": "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST/Web/icon.png",
     "versions": [
       {
-        "version": "1.1.2.0",
-        "changelog": "Inject SST into jellyfin-web index.html on each /web load so Find subtitles appears in the CC action sheet. Serve /web/sst.js directly. Match Jellyfin 10.11 action sheet markup.",
+        "version": "1.2.0.0",
+        "changelog": "Find subtitles at the top of the CC menu. Full in-player search, metadata, download, track activation, and session-only delay controls. Does not store OpenSubtitles credentials.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST.zip",
-        "checksum": "6190b6a6e0148331f3c0395a7626e4af",
-        "timestamp": "2026-08-18T15:02:00Z"
+        "checksum": "f34ffb7e8e1dff54a13db4da8f6bd3f6",
+        "timestamp": "2026-08-18T15:11:43Z"
       }
     ]
   }
