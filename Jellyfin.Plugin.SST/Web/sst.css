@@ -135,16 +135,25 @@
     background: rgba(255, 255, 255, 0.08);
 }
 
-.actionSheetScroller:has(.sst-find-subtitles-item) {
-    display: flex;
-    flex-direction: column;
+.actionSheet:has(.sst-find-subtitles-item) {
+    max-height: min(84vh, calc(100dvh - 24px));
+}
+
+.actionSheet:has(.sst-find-subtitles-item) .actionSheetContent {
+    min-height: 0;
+    overflow: hidden;
+}
+
+.actionSheet:has(.sst-find-subtitles-item) .actionSheetScroller {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
 }
 
 .sst-find-subtitles-item {
     color: inherit;
-    order: -999;
+    flex-shrink: 0;
     border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-    margin-bottom: 4px;
 }
 
 .sst-media-info {
