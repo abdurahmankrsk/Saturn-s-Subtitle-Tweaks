@@ -2,6 +2,11 @@
 
 All notable changes to Saturn's Subtitle Tweaks (SST) will be documented in this file.
 
+## [1.3.8] - 2026-08-18
+
+### Fixed
+- CC subtitle menu is full size again on phone, and a normal popover height on PC
+
 ## [1.3.7] - 2026-08-18
 
 ### Fixed
