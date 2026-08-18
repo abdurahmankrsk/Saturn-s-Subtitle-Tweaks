@@ -44,21 +44,18 @@ public sealed partial class SstHtmlInjectorMiddleware
     {
         ArgumentNullException.ThrowIfNull(context);
 
+        var handled = false;
 #pragma warning disable CA1031
         try
         {
             if (IsAssetRequest(context.Request.Path, out var assetType))
             {
                 await WriteAssetAsync(context, assetType).ConfigureAwait(false);
-                return;
+                handled = true;
             }
-
-            if (IsIndexRequest(context.Request))
+            else if (IsIndexRequest(context.Request))
             {
-                if (await TryServeInjectedIndexAsync(context).ConfigureAwait(false))
-                {
-                    return;
-                }
+                handled = await TryServeInjectedIndexAsync(context).ConfigureAwait(false);
             }
         }
         catch (Exception ex)
@@ -66,6 +63,11 @@ public sealed partial class SstHtmlInjectorMiddleware
             LogMiddlewareFailed(_logger, ex);
         }
 #pragma warning restore CA1031
+
+        if (handled || context.Response.HasStarted)
+        {
+            return;
+        }
 
         await _next(context).ConfigureAwait(false);
     }
