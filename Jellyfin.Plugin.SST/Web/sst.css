@@ -58,6 +58,33 @@
     overflow: hidden;
 }
 
+.sst-dialog-content-compact {
+    max-width: 460px;
+    max-height: min(50vh, calc(100dvh - 24px));
+}
+
+.sst-subtitle-overlay {
+    position: absolute;
+    left: 5%;
+    right: 5%;
+    bottom: 11%;
+    z-index: 20;
+    pointer-events: none;
+    text-align: center;
+    color: #fff;
+    font-size: clamp(1rem, 2.4vw, 1.7rem);
+    font-weight: 600;
+    line-height: 1.35;
+    text-shadow: 0 0 6px #000, 0 2px 8px #000, 0 0 2px #000;
+}
+
+.sst-subtitle-line {
+    display: inline-block;
+    padding: 2px 8px;
+    background: rgba(0, 0, 0, 0.45);
+    border-radius: 4px;
+}
+
 .sst-planet-icon {
     display: inline-block;
     margin-right: 6px;
@@ -139,24 +166,31 @@
     background: rgba(255, 255, 255, 0.08);
 }
 
-.actionSheet:has(.sst-find-subtitles-item) {
+.actionSheet:has(.sst-find-subtitles-item),
+.actionSheet:has(.sst-offset-item) {
     max-height: min(84vh, calc(100dvh - 24px));
 }
 
-.actionSheet:has(.sst-find-subtitles-item) .actionSheetContent {
+.actionSheet:has(.sst-find-subtitles-item) .actionSheetContent,
+.actionSheet:has(.sst-offset-item) .actionSheetContent {
     min-height: 0;
     overflow: hidden;
 }
 
-.actionSheet:has(.sst-find-subtitles-item) .actionSheetScroller {
+.actionSheet:has(.sst-find-subtitles-item) .actionSheetScroller,
+.actionSheet:has(.sst-offset-item) .actionSheetScroller {
     min-height: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
 }
 
-.sst-find-subtitles-item {
+.sst-find-subtitles-item,
+.sst-offset-item {
     color: inherit;
     flex-shrink: 0;
+}
+
+.sst-offset-item {
     border-bottom: 1px solid rgba(255, 255, 255, 0.12);
 }
 
@@ -443,7 +477,11 @@
 .sst-offset-controls {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
+}
+
+.sst-offset-controls .sst-status-hint {
+    margin: 0;
 }
 
 .sst-offset-label {
