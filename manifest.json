@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST/Web/icon.png",
     "versions": [
       {
-        "version": "1.2.1.0",
-        "changelog": "Keep the CC subtitle sheet on screen. Find subtitles stays at the top; extra tracks scroll instead of running under the taskbar.",
+        "version": "1.2.2.0",
+        "changelog": "Find subtitles dialog is clickable again. Leftover Jellyfin action-sheet overlay no longer swallows clicks.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST.zip",
-        "checksum": "cc407e6c05b149e18d859327eab6e75f",
-        "timestamp": "2026-08-18T15:18:53Z"
+        "checksum": "72a1ade8c9767e592e295247bedcaf83",
+        "timestamp": "2026-08-18T15:25:17Z"
       }
     ]
   }
