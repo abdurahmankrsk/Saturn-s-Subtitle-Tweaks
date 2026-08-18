@@ -2,6 +2,15 @@
 
 All notable changes to Saturn's Subtitle Tweaks (SST) will be documented in this file.
 
+## [1.3.6] - 2026-08-18
+
+### Fixed
+- Laptop CC popover sits just above the progress bar after SST adds its rows
+- Find Subtitles and Subtitle Offset also appear next to CC on the Jellyfin Web player bar (desktop and web-TV)
+
+### Notes
+- Official Android TV, Fire TV, Apple TV, and Roku apps still cannot show SST (those apps do not load Jellyfin Web)
+
 ## [1.3.5] - 2026-08-18
 
 ### Fixed
