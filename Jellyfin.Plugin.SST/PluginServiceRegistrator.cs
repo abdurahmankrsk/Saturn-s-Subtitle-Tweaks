@@ -12,8 +12,7 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
     /// <inheritdoc />
     public void RegisterServices(IServiceCollection serviceCollection, IServerApplicationHost applicationHost)
     {
-        // Register the script injector as a hosted service.
-        // This runs on server startup and injects SST's script tag into jellyfin-web's index.html.
+        // Delayed, non-destructive web-script registration. Must not throw.
         serviceCollection.AddHostedService<ScriptInjector>();
     }
 }
