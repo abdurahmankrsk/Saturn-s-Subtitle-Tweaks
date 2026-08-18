@@ -2,6 +2,11 @@
 
 All notable changes to Saturn's Subtitle Tweaks (SST) will be documented in this file.
 
+## [1.2.3] - 2026-08-18
+
+### Changed
+- CC menu item and dialog title now read **🪐 Find Subtitles**
+
 ## [1.2.2] - 2026-08-18
 
 ### Fixed
