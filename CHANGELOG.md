@@ -2,6 +2,17 @@
 
 All notable changes to Saturn's Subtitle Tweaks (SST) will be documented in this file.
 
+## [1.2.0] - 2026-08-18
+
+### Added
+- Full in-player subtitle search: language picker, remote results, metadata badges
+- One-click download through Jellyfin's subtitle provider API
+- Attempts to select the new track immediately after download
+- Session-only subtitle delay buttons (`-0.5s -0.1s 0 +0.1s +0.5s`) that do not edit subtitle files
+
+### Fixed
+- **Find subtitles** is inserted at the top of the CC action sheet instead of the bottom
+
 ## [1.1.2] - 2026-08-18
 
 ### Fixed
