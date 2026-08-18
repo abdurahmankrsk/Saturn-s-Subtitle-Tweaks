@@ -13,9 +13,8 @@ category: "Subtitles"
 artifacts:
   - "Jellyfin.Plugin.SST.dll"
 changelog: |-
-  ## v1.1.1
-  - Fix: Jellyfin server no longer crashes on plugin load
-  - Delayed, optional File Transformation registration
-  - No webpack-bundle rewriting
-  - Pinned Jellyfin.Controller 10.11.0
+  ## v1.1.2
+  - Inject SST into /web/index.html via ASP.NET middleware so the CC menu button can actually appear
+  - Serve /web/sst.js without relying on File Transformation
+  - Match Jellyfin 10.11 subtitle action sheet structure
 
