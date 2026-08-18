@@ -2,6 +2,11 @@
 
 All notable changes to Saturn's Subtitle Tweaks (SST) will be documented in this file.
 
+## [1.3.1] - 2026-08-18
+
+### Fixed
+- Jellyfin server no longer registers File Transformation or writes `index.html` after startup (those leftover hooks could still take Kestrel down). SST injects only via request middleware.
+
 ## [1.3.0] - 2026-08-18
 
 ### Added
