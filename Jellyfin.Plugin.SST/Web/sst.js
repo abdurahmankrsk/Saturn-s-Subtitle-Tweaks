@@ -14,7 +14,7 @@
         return;
     }
 
-    var SST_VERSION = '1.3.6.0';
+    var SST_VERSION = '1.3.7.0';
     var PLUGIN_ID = 'b3a1c2d4-e5f6-4a89-9bcd-1234567890ab';
     var LOG_PREFIX = '[SST]';
     var FIND_SUBTITLES_ID = 'sst-find-subtitles';
@@ -23,7 +23,6 @@
     var OFFSET_LABEL = '🪐 Subtitle Offset';
     var INJECTED_ITEM_CLASS = 'sst-find-subtitles-item';
     var OFFSET_ITEM_CLASS = 'sst-offset-item';
-    var subtitleSheetExpectUntil = 0;
 
     var COMMON_LANGUAGES = [
         { code: 'eng', name: 'English' },
@@ -651,64 +650,21 @@
         });
     }
 
-    async function fetchPlaybackInfo(itemId) {
-        var api = getApiClient();
-        if (!api || !itemId) {
-            return null;
-        }
-        var userId = typeof api.getCurrentUserId === 'function' ? api.getCurrentUserId() : '';
-        try {
-            if (typeof api.getPlaybackInfo === 'function') {
-                return await api.getPlaybackInfo(itemId, userId);
-            }
-        } catch (e) {
-            console.debug(LOG_PREFIX, 'getPlaybackInfo failed', e);
-        }
-        if (typeof api.ajax !== 'function') {
-            return null;
-        }
-        try {
-            return await api.ajax({
-                type: 'POST',
-                url: api.getUrl('Items/' + itemId + '/PlaybackInfo', userId ? { UserId: userId } : {}),
-                data: JSON.stringify({ UserId: userId, AutoOpenLiveStream: false }),
-                contentType: 'application/json',
-                dataType: 'json'
-            });
-        } catch (e) {
-            console.debug(LOG_PREFIX, 'PlaybackInfo request failed', e);
-            return null;
-        }
-    }
-
     async function getItemSubtitleStreams(itemId) {
         var api = getApiClient();
-        var lists = [];
-        var mediaSourceId = null;
+        var streams = [];
         if (api && typeof api.getItem === 'function') {
             try {
                 var userId = typeof api.getCurrentUserId === 'function' ? api.getCurrentUserId() : '';
                 var item = await api.getItem(userId, itemId);
-                lists.push(subtitleStreamsFromItem(item));
+                streams = subtitleStreamsFromItem(item);
             } catch (e) {
                 console.debug(LOG_PREFIX, 'getItem subtitle streams failed', e);
             }
         }
-        try {
-            var info = await fetchPlaybackInfo(itemId);
-            var sources = (info && info.MediaSources) || [];
-            for (var i = 0; i < sources.length; i++) {
-                lists.push(subtitleStreamsFromItem(sources[i]));
-                if (!mediaSourceId && sources[i] && sources[i].Id) {
-                    mediaSourceId = sources[i].Id;
-                }
-            }
-        } catch (e) {
-            console.debug(LOG_PREFIX, 'playback subtitle streams failed', e);
-        }
         return {
-            streams: mergeSubtitleStreams(lists),
-            mediaSourceId: mediaSourceId
+            streams: streams,
+            mediaSourceId: null
         };
     }
 
@@ -1599,10 +1555,6 @@
             return true;
         }
 
-        if (Date.now() < subtitleSheetExpectUntil) {
-            return true;
-        }
-
         var titleEl = sheet.querySelector('.actionSheetTitle');
         var title = titleEl && titleEl.textContent ? titleEl.textContent.replace(/\s+/g, ' ').trim().toLowerCase() : '';
         return /subtitle|podnaslov|titlov|sous-titr|untertitel|sottotitol|napisy|felirat|undertext|ondertitel/.test(title);
@@ -1899,72 +1851,12 @@
     }
 
     function onSubtitleButtonClick() {
-        subtitleSheetExpectUntil = Date.now() + 2500;
-        var delays = [0, 40, 120, 300, 800];
+        var delays = [0, 40, 120, 300];
         delays.forEach(function (delay) {
             setTimeout(function () {
                 scanForSubtitleActionSheets(document);
             }, delay);
         });
-    }
-
-    function createOsdButton(className, title, glyph, onClick) {
-        var sample = document.querySelector('.videoOsdBottom .btnSubtitles, .videoOsdBottom .paper-icon-button-light');
-        var btn;
-        if (sample) {
-            btn = sample.cloneNode(true);
-            btn.className = String(sample.className || '')
-                .replace(/\bbtnSubtitles\b/g, '')
-                .replace(/\bbtnAudio\b/g, '')
-                .replace(/\bhide\b/g, '')
-                .replace(/\bsst-osd-find\b/g, '')
-                .replace(/\bsst-osd-offset\b/g, '')
-                .replace(/\s+/g, ' ')
-                .trim() + ' ' + className;
-            btn.classList.remove('hide');
-            btn.removeAttribute('disabled');
-            btn.removeAttribute('autofocus');
-            btn.type = 'button';
-        } else {
-            btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'paper-icon-button-light ' + className;
-        }
-        btn.setAttribute('title', title);
-        btn.setAttribute('aria-label', title);
-        btn.innerHTML = '<span class="sst-osd-glyph" aria-hidden="true">' + glyph + '</span>';
-        btn.addEventListener('click', function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-            onClick();
-        });
-        btn.addEventListener('keydown', function (e) {
-            if (isActivateKey(e)) {
-                e.preventDefault();
-                e.stopPropagation();
-                onClick();
-            }
-        });
-        return btn;
-    }
-
-    function injectOsdButtons() {
-        var osd = document.querySelector('.videoOsdBottom');
-        if (!osd || osd.querySelector('.sst-osd-find')) {
-            return;
-        }
-        var subBtn = osd.querySelector('.btnSubtitles');
-        var parent = (subBtn && subBtn.parentNode) || osd.querySelector('.buttons') || osd;
-        var findBtn = createOsdButton('sst-osd-find', FIND_SUBTITLES_LABEL, '🪐', showFindDialog);
-        var offsetBtn = createOsdButton('sst-osd-offset', OFFSET_LABEL, '±', showOffsetDialog);
-        if (subBtn && subBtn.parentNode) {
-            parent.insertBefore(findBtn, subBtn);
-            parent.insertBefore(offsetBtn, subBtn);
-        } else {
-            parent.appendChild(findBtn);
-            parent.appendChild(offsetBtn);
-        }
-        console.info(LOG_PREFIX, 'Injected SST OSD buttons');
     }
 
     function attachSubtitleButtonListener() {
@@ -2005,27 +1897,23 @@
             return;
         }
 
-        observer = new MutationObserver(function (mutations) {
-            for (var i = 0; i < mutations.length; i++) {
-                var added = mutations[i].addedNodes;
-                for (var j = 0; j < added.length; j++) {
-                    var node = added[j];
-                    if (node.nodeType === Node.ELEMENT_NODE) {
-                        scanForSubtitleActionSheets(node);
-                        injectOsdButtons();
-                    }
-                }
+        var scanTimer = null;
+        observer = new MutationObserver(function () {
+            if (scanTimer) {
+                return;
             }
+            scanTimer = setTimeout(function () {
+                scanTimer = null;
+                scanForSubtitleActionSheets(document);
+            }, 80);
         });
 
         observer.observe(document.body, { childList: true, subtree: true });
         scanForSubtitleActionSheets(document);
-        injectOsdButtons();
     }
 
     function watchPlaybackItemChanges() {
         setInterval(function () {
-            injectOsdButtons();
             getPlayingContext().then(function (ctx) {
                 resetOffsetIfItemChanged(ctx ? ctx.itemId : null);
             }).catch(function () {
@@ -2038,7 +1926,6 @@
         attachSubtitleButtonListener();
         startActionSheetObserver();
         watchPlaybackItemChanges();
-        injectOsdButtons();
         console.info(LOG_PREFIX, 'Web injection active (v' + SST_VERSION + ')');
     }
 
