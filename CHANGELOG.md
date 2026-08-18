@@ -2,6 +2,11 @@
 
 All notable changes to Saturn's Subtitle Tweaks (SST) will be documented in this file.
 
+## [1.2.2] - 2026-08-18
+
+### Fixed
+- Find subtitles dialog is clickable again: leftover Jellyfin action-sheet overlay (`z-index: 999999`) no longer sits on top and swallows clicks
+
 ## [1.2.1] - 2026-08-18
 
 ### Fixed
