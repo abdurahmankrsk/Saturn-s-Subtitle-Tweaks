@@ -2,6 +2,11 @@
 
 All notable changes to Saturn's Subtitle Tweaks (SST) will be documented in this file.
 
+## [1.2.1] - 2026-08-18
+
+### Fixed
+- CC subtitle sheet stays on screen after **Find subtitles** is inserted: shifted up, capped to the viewport, and the track list scrolls instead of running under the taskbar
+
 ## [1.2.0] - 2026-08-18
 
 ### Added
