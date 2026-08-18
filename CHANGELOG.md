@@ -2,6 +2,14 @@
 
 All notable changes to Saturn's Subtitle Tweaks (SST) will be documented in this file.
 
+## [1.3.7] - 2026-08-18
+
+### Fixed
+- Stop cloning player-bar buttons and calling PlaybackInfo (those loops could freeze the web client or take the Jellyfin server down)
+
+### Notes
+- Tesla / Google TV uses the native Jellyfin Android TV app. SST cannot add Find Subtitles to that CC menu.
+
 ## [1.3.6] - 2026-08-18
 
 ### Fixed
