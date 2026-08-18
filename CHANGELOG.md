@@ -2,6 +2,11 @@
 
 All notable changes to Saturn's Subtitle Tweaks (SST) will be documented in this file.
 
+## [1.3.4] - 2026-08-18
+
+### Fixed
+- The same OpenSubtitles result can only be downloaded once per episode
+
 ## [1.3.3] - 2026-08-18
 
 ### Fixed
