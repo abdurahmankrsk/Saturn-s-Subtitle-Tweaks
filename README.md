@@ -160,6 +160,8 @@ YMMMUP^
 
 If an update fails with a checksum error, wait a minute and try again (GitHub `raw` CDN can lag behind the latest commit), or run `.\scripts\build-release.ps1` locally and copy the DLL manually.
 
+**Do not install File Transformation just to make SST load.** SST 1.1.1+ registers it only after Jellyfin has finished starting. If a previous SST version crashed the server, delete the SST folder under `plugins/` and install 1.1.1.0 from the catalog.
+
 ### Method 2: Manual Assembly Deployment
 1. Grab the latest `Jellyfin.Plugin.SST.dll` artifact from [Releases](../../releases).
 2. Drop the assembly into your server's plugin directory:
