@@ -14,7 +14,7 @@
         return;
     }
 
-    var SST_VERSION = '1.2.0.0';
+    var SST_VERSION = '1.2.1.0';
     var PLUGIN_ID = 'b3a1c2d4-e5f6-4a89-9bcd-1234567890ab';
     var LOG_PREFIX = '[SST]';
     var FIND_SUBTITLES_ID = 'sst-find-subtitles';
@@ -891,6 +891,7 @@
 
         if (sheet.querySelector('.' + INJECTED_ITEM_CLASS) ||
             sheet.querySelector('[data-id="' + FIND_SUBTITLES_ID + '"]')) {
+            fitActionSheetToViewport(sheet);
             return;
         }
 
@@ -906,7 +907,80 @@
         } else {
             scroller.appendChild(item);
         }
+        fitActionSheetToViewport(sheet);
+        [0, 50, 160].forEach(function (delay) {
+            setTimeout(function () {
+                fitActionSheetToViewport(sheet);
+            }, delay);
+        });
         console.info(LOG_PREFIX, 'Injected "' + FIND_SUBTITLES_LABEL + '" at top of subtitle action sheet');
+    }
+
+    function getViewportHeight() {
+        if (window.visualViewport && window.visualViewport.height) {
+            return window.visualViewport.height;
+        }
+        return window.innerHeight || document.documentElement.clientHeight || 0;
+    }
+
+    function getVisibleBottomLimit() {
+        var limit = getViewportHeight() - 12;
+        var osdSelectors = [
+            '.videoOsdBottom',
+            '.osdMain',
+            '.osdControls'
+        ];
+        for (var i = 0; i < osdSelectors.length; i++) {
+            var osd = document.querySelector(osdSelectors[i]);
+            if (!osd) {
+                continue;
+            }
+            var osdRect = osd.getBoundingClientRect();
+            if (osdRect.height > 8 && osdRect.top > 80 && osdRect.top < limit) {
+                limit = osdRect.top - 8;
+                break;
+            }
+        }
+        return limit;
+    }
+
+    function fitActionSheetToViewport(sheet) {
+        if (!sheet || !sheet.isConnected || sheet.classList.contains('actionsheet-fullscreen')) {
+            return;
+        }
+
+        var margin = 12;
+        var bottomLimit = getVisibleBottomLimit();
+        var maxHeight = Math.max(160, bottomLimit - margin);
+        sheet.style.maxHeight = maxHeight + 'px';
+
+        var rect = sheet.getBoundingClientRect();
+        var overflowY = rect.bottom - bottomLimit;
+        if (overflowY > 0) {
+            var newTop = Math.max(margin, rect.top - overflowY - 8);
+            sheet.style.position = 'fixed';
+            sheet.style.margin = '0';
+            sheet.style.top = newTop + 'px';
+            sheet.style.bottom = 'auto';
+        }
+
+        rect = sheet.getBoundingClientRect();
+        if (rect.top < margin) {
+            sheet.style.top = margin + 'px';
+            rect = sheet.getBoundingClientRect();
+        }
+
+        var scroller = sheet.querySelector('.actionSheetScroller');
+        if (!scroller) {
+            return;
+        }
+
+        var title = sheet.querySelector('.actionSheetTitle');
+        var titleHeight = title ? title.getBoundingClientRect().height : 0;
+        var scrollerMax = Math.max(120, bottomLimit - rect.top - titleHeight - 12);
+        scroller.style.maxHeight = scrollerMax + 'px';
+        scroller.style.minHeight = '0';
+        scroller.style.overflowY = 'auto';
     }
 
     function scanForSubtitleActionSheets(root) {
