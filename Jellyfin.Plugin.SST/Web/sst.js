@@ -14,7 +14,7 @@
         return;
     }
 
-    var SST_VERSION = '1.3.7.0';
+    var SST_VERSION = '1.3.8.0';
     var PLUGIN_ID = 'b3a1c2d4-e5f6-4a89-9bcd-1234567890ab';
     var LOG_PREFIX = '[SST]';
     var FIND_SUBTITLES_ID = 'sst-find-subtitles';
@@ -97,6 +97,24 @@
             return true;
         }
         return !!(document.body && document.body.classList && document.body.classList.contains('layout-tv'));
+    }
+
+    function isMobileLayout() {
+        try {
+            if (window.layoutManager && window.layoutManager.mobile) {
+                return true;
+            }
+        } catch (e) {
+            console.debug(LOG_PREFIX, 'layoutManager mobile check failed', e);
+        }
+        var html = document.documentElement;
+        if (html && html.classList && html.classList.contains('layout-mobile')) {
+            return true;
+        }
+        if (document.body && document.body.classList && document.body.classList.contains('layout-mobile')) {
+            return true;
+        }
+        return window.innerWidth > 0 && window.innerWidth < 850;
     }
 
     function isActivateKey(e) {
@@ -1780,37 +1798,52 @@
         return vw > 0 && rect.width > 0 && rect.width < vw * 0.72;
     }
 
+    function clearSheetConstraint(sheet) {
+        if (!sheet) {
+            return;
+        }
+        sheet.classList.remove('sst-cc-constrained');
+        sheet.style.removeProperty('transform');
+        sheet.style.removeProperty('max-height');
+        sheet.style.removeProperty('overflow');
+        var scroller = sheet.querySelector('.actionSheetScroller');
+        if (scroller) {
+            scroller.style.removeProperty('max-height');
+            scroller.style.removeProperty('overflow-y');
+        }
+    }
+
     function constrainActionSheetScroller(sheet) {
-        if (!sheet || !sheet.isConnected || !isPopoverActionSheet(sheet)) {
+        if (!sheet || !sheet.isConnected) {
+            return;
+        }
+
+        if (isMobileLayout() || isTvLayout() || !isPopoverActionSheet(sheet)) {
+            clearSheetConstraint(sheet);
+            return;
+        }
+
+        sheet.style.removeProperty('transform');
+
+        var sheetRect = sheet.getBoundingClientRect();
+        var bottomLimit = getOsdBottomLimit();
+        var overflow = sheetRect.bottom - bottomLimit;
+        if (overflow > 1) {
+            var maxShift = Math.max(0, sheetRect.top - 8);
+            var shift = Math.round(Math.min(overflow, maxShift));
+            if (shift > 0) {
+                sheet.style.transform = 'translateY(' + (-shift) + 'px)';
+            }
+        }
+
+        var placed = sheet.getBoundingClientRect();
+        var available = Math.floor(bottomLimit - placed.top);
+        if (available < 280) {
             return;
         }
 
         sheet.classList.add('sst-cc-constrained');
-        sheet.style.removeProperty('transform');
-
-        var sheetRect = sheet.getBoundingClientRect();
-        var viewportH = (window.visualViewport && window.visualViewport.height) || window.innerHeight || 0;
-        var bottomLimit = getOsdBottomLimit();
-        var maxH = Math.min(
-            sheetRect.height || sheet.offsetHeight || 240,
-            Math.max(140, bottomLimit - 16),
-            Math.floor(viewportH * 0.7)
-        );
-        if (maxH < 140) {
-            maxH = Math.min(sheet.offsetHeight || 240, Math.floor(viewportH * 0.55));
-        }
-
-        var desiredTop = bottomLimit - maxH;
-        if (desiredTop < 8) {
-            desiredTop = 8;
-            maxH = Math.max(140, bottomLimit - desiredTop);
-        }
-
-        var shift = Math.round(desiredTop - sheetRect.top);
-        if (shift !== 0) {
-            sheet.style.transform = 'translateY(' + shift + 'px)';
-        }
-        sheet.style.setProperty('max-height', Math.floor(maxH) + 'px', 'important');
+        sheet.style.setProperty('max-height', available + 'px', 'important');
         sheet.style.overflow = 'hidden';
 
         var scroller = sheet.querySelector('.actionSheetScroller');
@@ -1819,10 +1852,9 @@
         }
 
         var title = sheet.querySelector('.actionSheetTitle');
-        var placed = sheet.getBoundingClientRect();
         var topUsed = title ? Math.max(0, title.getBoundingClientRect().bottom - placed.top) : 0;
-        var scrollMax = Math.floor(maxH - topUsed - 8);
-        if (scrollMax >= 80) {
+        var scrollMax = Math.floor(available - topUsed - 8);
+        if (scrollMax >= 200) {
             scroller.style.setProperty('max-height', scrollMax + 'px', 'important');
             scroller.style.overflowY = 'auto';
         }
