@@ -166,24 +166,6 @@
     background: rgba(255, 255, 255, 0.08);
 }
 
-.actionSheet:has(.sst-find-subtitles-item),
-.actionSheet:has(.sst-offset-item) {
-    max-height: min(84vh, calc(100dvh - 24px));
-}
-
-.actionSheet:has(.sst-find-subtitles-item) .actionSheetContent,
-.actionSheet:has(.sst-offset-item) .actionSheetContent {
-    min-height: 0;
-    overflow: hidden;
-}
-
-.actionSheet:has(.sst-find-subtitles-item) .actionSheetScroller,
-.actionSheet:has(.sst-offset-item) .actionSheetScroller {
-    min-height: 0;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-}
-
 .sst-find-subtitles-item,
 .sst-offset-item {
     color: inherit;
