@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST/Web/icon.png",
     "versions": [
       {
-        "version": "1.3.8.0",
-        "changelog": "Restore a usable CC menu size on PC and phone. Tesla/Google TV native app still cannot show SST.",
+        "version": "1.3.9.0",
+        "changelog": "Crash fix: SST no longer wraps every Jellyfin request. After install, delete the old plugin folder if the server is down, then install 1.3.9 and restart once.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST.zip",
-        "checksum": "9698719d54b9eef12c443a6157f065ec",
-        "timestamp": "2026-08-18T19:49:03Z"
+        "checksum": "96be1e01fbf762996d20ae410338463e",
+        "timestamp": "2026-08-18T19:55:12Z"
       }
     ]
   }
