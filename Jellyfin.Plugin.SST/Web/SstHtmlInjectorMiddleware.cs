@@ -9,12 +9,16 @@ using Microsoft.Extensions.Logging;
 namespace Jellyfin.Plugin.SST.Web;
 
 /// <summary>
-/// Serves SST assets and returns a patched jellyfin-web index.html.
-/// Does not wrap the response body (static files use SendFile and that would
-/// produce an empty page). Only GET /web and /web/sst.* are handled.
+/// Serves SST assets and a patched jellyfin-web index.html.
+/// Does not wrap Response.Body. Only runs for the GET paths selected by
+/// <see cref="SstStartupFilter"/>.
 /// </summary>
 public sealed partial class SstHtmlInjectorMiddleware
 {
+    private static readonly object CacheLock = new();
+    private static string? CachedHtml;
+    private static string? CachedKey;
+
     private readonly RequestDelegate _next;
     private readonly ILogger<SstHtmlInjectorMiddleware> _logger;
     private readonly IApplicationPaths _appPaths;
@@ -75,15 +79,13 @@ public sealed partial class SstHtmlInjectorMiddleware
     private static bool IsAssetRequest(PathString path, out string assetType)
     {
         var value = path.Value ?? string.Empty;
-        if (value.Equals("/web/sst.js", StringComparison.OrdinalIgnoreCase)
-            || value.Equals("/sst/ClientScript", StringComparison.OrdinalIgnoreCase))
+        if (value.Equals("/web/sst.js", StringComparison.OrdinalIgnoreCase))
         {
             assetType = "js";
             return true;
         }
 
-        if (value.Equals("/web/sst.css", StringComparison.OrdinalIgnoreCase)
-            || value.Equals("/sst/ClientStyle", StringComparison.OrdinalIgnoreCase))
+        if (value.Equals("/web/sst.css", StringComparison.OrdinalIgnoreCase))
         {
             assetType = "css";
             return true;
@@ -103,8 +105,7 @@ public sealed partial class SstHtmlInjectorMiddleware
         var path = request.Path.Value ?? string.Empty;
         return path.Equals("/web", StringComparison.OrdinalIgnoreCase)
             || path.Equals("/web/", StringComparison.OrdinalIgnoreCase)
-            || path.EndsWith("/web/index.html", StringComparison.OrdinalIgnoreCase)
-            || path.Equals("/index.html", StringComparison.OrdinalIgnoreCase);
+            || path.Equals("/web/index.html", StringComparison.OrdinalIgnoreCase);
     }
 
     private static async Task WriteAssetAsync(HttpContext context, string assetType)
@@ -132,6 +133,21 @@ public sealed partial class SstHtmlInjectorMiddleware
 
     private async Task<bool> TryServeInjectedIndexAsync(HttpContext context)
     {
+        if (!TryBuildInjectedHtml(context, out var html) || string.IsNullOrEmpty(html))
+        {
+            return false;
+        }
+
+        context.Response.StatusCode = StatusCodes.Status200OK;
+        context.Response.ContentType = "text/html; charset=utf-8";
+        context.Response.Headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
+        await context.Response.WriteAsync(html, context.RequestAborted).ConfigureAwait(false);
+        return true;
+    }
+
+    private bool TryBuildInjectedHtml(HttpContext context, out string html)
+    {
+        html = string.Empty;
         var webPath = _appPaths.WebPath;
         if (string.IsNullOrEmpty(webPath))
         {
@@ -144,31 +160,46 @@ public sealed partial class SstHtmlInjectorMiddleware
             return false;
         }
 
-        var html = await File.ReadAllTextAsync(indexPath, Encoding.UTF8, context.RequestAborted).ConfigureAwait(false);
-        if (html.IndexOf("</head>", StringComparison.OrdinalIgnoreCase) < 0)
+        var prefix = context.Request.PathBase.HasValue
+            ? context.Request.PathBase.Value!.TrimEnd('/')
+            : string.Empty;
+        var info = new FileInfo(indexPath);
+        var cacheKey = prefix + "|" + info.Length.ToString(System.Globalization.CultureInfo.InvariantCulture) + "|" + info.LastWriteTimeUtc.Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+        lock (CacheLock)
+        {
+            if (CachedHtml is not null && CachedKey == cacheKey)
+            {
+                html = CachedHtml;
+                return true;
+            }
+        }
+
+        var source = File.ReadAllText(indexPath, Encoding.UTF8);
+        if (source.IndexOf("</head>", StringComparison.OrdinalIgnoreCase) < 0)
         {
             return false;
         }
 
-        if (!html.Contains("id=\"sst-script\"", StringComparison.Ordinal)
-            && !html.Contains("/web/sst.js", StringComparison.Ordinal))
+        if (!source.Contains("id=\"sst-script\"", StringComparison.Ordinal)
+            && !source.Contains("/web/sst.js", StringComparison.Ordinal))
         {
-            var prefix = context.Request.PathBase.HasValue
-                ? context.Request.PathBase.Value!.TrimEnd('/')
-                : string.Empty;
             var injection =
                 $"\n    <!-- SST -->\n" +
                 $"    <link rel=\"stylesheet\" href=\"{prefix}/web/sst.css\" id=\"sst-client-style\" />\n" +
                 $"    <script src=\"{prefix}/web/sst.js\" id=\"sst-script\" defer></script>\n    ";
-            var head = html.LastIndexOf("</head>", StringComparison.OrdinalIgnoreCase);
-            html = html.Insert(head, injection);
+            var head = source.LastIndexOf("</head>", StringComparison.OrdinalIgnoreCase);
+            source = source.Insert(head, injection);
             LogIndexInjected(_logger);
         }
 
-        context.Response.StatusCode = StatusCodes.Status200OK;
-        context.Response.ContentType = "text/html; charset=utf-8";
-        context.Response.Headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
-        await context.Response.WriteAsync(html, context.RequestAborted).ConfigureAwait(false);
+        lock (CacheLock)
+        {
+            CachedHtml = source;
+            CachedKey = cacheKey;
+        }
+
+        html = source;
         return true;
     }
 
