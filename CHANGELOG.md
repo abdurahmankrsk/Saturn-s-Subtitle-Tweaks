@@ -2,6 +2,16 @@
 
 All notable changes to Saturn's Subtitle Tweaks (SST) will be documented in this file.
 
+## [1.1.1] - 2026-08-18
+
+### Fixed
+- **Jellyfin server no longer crashes on plugin load**
+- Removed startup `AssemblyLoad` hooks and webpack-bundle File Transformation (those could take down Kestrel)
+- Delayed optional File Transformation registration until after the server is fully started
+- Stopped using `Microsoft.Net.Http.Headers` in the plugin controller
+- Pinned `Jellyfin.Controller` to `10.11.0` instead of the unstable `10.*-*` wildcard
+- Index.html disk writes are optional, delayed, and never fatal
+
 ## [1.1.0] - 2026-08-18
 
 ### Added
