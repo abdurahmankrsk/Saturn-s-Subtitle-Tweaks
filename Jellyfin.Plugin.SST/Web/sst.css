@@ -280,6 +280,18 @@
     color: #fff;
 }
 
+.sst-btn-download.sst-btn-already,
+.sst-btn-download.sst-btn-already:disabled {
+    opacity: 1;
+    background: rgba(76, 175, 80, 0.2);
+    color: #81c784;
+    cursor: default;
+}
+
+.sst-result-downloaded {
+    opacity: 0.78;
+}
+
 /* ═══════════════════════════════════════════════════════════════
    STATUS MESSAGES
    ═══════════════════════════════════════════════════════════════ */
@@ -394,6 +406,11 @@
 .sst-badge-hash {
     background: rgba(76, 175, 80, 0.15);
     color: #81c784;
+}
+
+.sst-badge-owned {
+    background: rgba(0, 164, 220, 0.18);
+    color: #4fc3f7;
 }
 
 .sst-badge-forced {
