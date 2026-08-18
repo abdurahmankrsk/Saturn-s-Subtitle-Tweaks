@@ -2,6 +2,12 @@
 
 All notable changes to Saturn's Subtitle Tweaks (SST) will be documented in this file.
 
+## [1.3.3] - 2026-08-18
+
+### Fixed
+- Downloading an English result no longer applies an existing Croatian (or other) track
+- CC menu list scrolls above the progress bar without detaching from the CC button
+
 ## [1.3.2] - 2026-08-18
 
 ### Fixed
