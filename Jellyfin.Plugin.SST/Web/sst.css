@@ -15,7 +15,7 @@
     left: 0;
     width: 100%;
     height: 100%;
-    z-index: 99999;
+    z-index: 10000000 !important;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -35,17 +35,21 @@
     left: 0;
     width: 100%;
     height: 100%;
+    z-index: 0;
+    pointer-events: auto;
     background: rgba(0, 0, 0, 0.75);
 }
 
 .sst-dialog-content {
     position: relative;
+    z-index: 1;
+    pointer-events: auto;
     background: radial-gradient(circle at 85% 15%, #232238 0%, #171720 60%, #121218 100%);
     border: 1px solid rgba(243, 156, 18, 0.25);
     border-radius: 14px;
     width: 90%;
     max-width: 600px;
-    max-height: 85vh;
+    max-height: min(85vh, calc(100dvh - 24px));
     display: flex;
     flex-direction: column;
     box-shadow: 0 16px 48px rgba(0, 0, 0, 0.7), 0 0 24px rgba(108, 92, 231, 0.15);
