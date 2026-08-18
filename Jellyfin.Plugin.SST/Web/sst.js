@@ -14,7 +14,7 @@
         return;
     }
 
-    var SST_VERSION = '1.3.0.0';
+    var SST_VERSION = '1.3.1.0';
     var PLUGIN_ID = 'b3a1c2d4-e5f6-4a89-9bcd-1234567890ab';
     var LOG_PREFIX = '[SST]';
     var FIND_SUBTITLES_ID = 'sst-find-subtitles';
