@@ -2,19 +2,19 @@
   {
     "guid": "b3a1c2d4-e5f6-4a89-9bcd-1234567890ab",
     "name": "Saturn's Subtitle Tweaks",
-    "description": "Saturn's Subtitle Tweaks (SST) enhances Jellyfin playback with in-player subtitle search, download, and temporary timing controls. Phase 1 provides a \"Find subtitles\" entry in the CC/subtitle menu during playback. Requires a configured subtitle provider (e.g., Open Subtitles).",
-    "overview": "In-player subtitle search and timing controls for Jellyfin Web and supported clients.",
+    "description": "Saturn's Subtitle Tweaks (SST) enhances Jellyfin playback with in-player subtitle search. Version 1.1.1.0 is a crash-fix release: the plugin must not take down the Jellyfin server. Requires a configured subtitle provider (e.g., Open Subtitles).",
+    "overview": "In-player subtitle search for Jellyfin Web. v1.1.1.0 does not crash the server on load.",
     "owner": "abdurahmankrsk",
     "category": "Subtitles",
     "imageUrl": "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST/Web/icon.png",
     "versions": [
       {
-        "version": "1.1.0.0",
-        "changelog": "Phase 1 POC: reliable web script loading; \"Find subtitles\" injected into the Jellyfin 10.11.x subtitle action sheet; stub dialog; removed crash-prone injection code; improved FileTransformation bundle hooks.",
+        "version": "1.1.1.0",
+        "changelog": "Fix: Jellyfin no longer crashes on plugin load. Delayed File Transformation registration, no webpack-bundle rewriting, pinned Jellyfin.Controller 10.11.0.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST.zip",
-        "checksum": "46541a0e8fe96f2378314cf33d04f055",
-        "timestamp": "2026-08-17T22:20:23Z"
+        "checksum": "08cb2314acd71b0df9570931e72c629d",
+        "timestamp": "2026-08-18T14:49:13Z"
       }
     ]
   }
