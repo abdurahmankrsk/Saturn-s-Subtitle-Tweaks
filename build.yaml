@@ -1,6 +1,6 @@
 name: "Saturn's Subtitle Tweaks"
 guid: "b3a1c2d4-e5f6-4a89-9bcd-1234567890ab"
-version: 12
+version: 13
 targetAbi: "10.11.0.0"
 framework: "net9.0"
 owner: "community"
@@ -13,9 +13,9 @@ category: "Subtitles"
 artifacts:
   - "Jellyfin.Plugin.SST.dll"
 changelog: |-
-  ## v1.1.0
-  - Phase 1 POC: "Find subtitles" in Jellyfin 10.11.x subtitle action sheet
-  - Reliable web client script loading (index.html + webpack bundle hooks)
-  - Stub SST dialog during playback
-  - Removed crash-prone legacy injection code
-  - Plugin catalog icon and manifest checksum fix
+  ## v1.1.1
+  - Fix: Jellyfin server no longer crashes on plugin load
+  - Delayed, optional File Transformation registration
+  - No webpack-bundle rewriting
+  - Pinned Jellyfin.Controller 10.11.0
+
