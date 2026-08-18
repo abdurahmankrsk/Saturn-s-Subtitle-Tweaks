@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST/Web/icon.png",
     "versions": [
       {
-        "version": "1.3.4.0",
-        "changelog": "Each remote subtitle result can only be downloaded once for an episode.",
+        "version": "1.3.5.0",
+        "changelog": "Jellyfin Web TV layout: D-pad can open Find Subtitles. Native Android TV / Fire TV / Apple TV apps still cannot show SST in the CC menu.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST.zip",
-        "checksum": "a8832731a14d192f9c9552bb49bc89fa",
-        "timestamp": "2026-08-18T16:57:54Z"
+        "checksum": "6890266af444de1e6177f440349a8ae4",
+        "timestamp": "2026-08-18T17:30:10Z"
       }
     ]
   }
