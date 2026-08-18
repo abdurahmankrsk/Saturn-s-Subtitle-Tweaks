@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST/Web/icon.png",
     "versions": [
       {
-        "version": "1.3.2.0",
-        "changelog": "Apply only the downloaded subtitle, keep the CC menu attached to the player, and speed up apply.",
+        "version": "1.3.3.0",
+        "changelog": "Apply the downloaded English track instead of an existing Croatian one. CC menu scrolls above the progress bar without floating away.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST.zip",
-        "checksum": "b1f18c6a8cd3ebee4f789e5b74763d0a",
-        "timestamp": "2026-08-18T16:39:43Z"
+        "checksum": "cc592298c8b484df5925149ba9ed59a8",
+        "timestamp": "2026-08-18T16:52:18Z"
       }
     ]
   }
