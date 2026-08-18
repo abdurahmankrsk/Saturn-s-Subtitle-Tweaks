@@ -135,8 +135,16 @@
     background: rgba(255, 255, 255, 0.08);
 }
 
+.actionSheetScroller:has(.sst-find-subtitles-item) {
+    display: flex;
+    flex-direction: column;
+}
+
 .sst-find-subtitles-item {
     color: inherit;
+    order: -999;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    margin-bottom: 4px;
 }
 
 .sst-media-info {
