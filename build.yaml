@@ -1,6 +1,6 @@
 name: "Saturn's Subtitle Tweaks"
 guid: "b3a1c2d4-e5f6-4a89-9bcd-1234567890ab"
-version: 22
+version: 23
 targetAbi: "10.11.0.0"
 framework: "net9.0"
 owner: "community"
@@ -13,7 +13,8 @@ category: "Subtitles"
 artifacts:
   - "Jellyfin.Plugin.SST.dll"
 changelog: |-
-  ## v1.3.5
-  - Jellyfin Web TV layout: D-pad can open Find Subtitles
-  - Native Android TV / Fire TV / Apple TV apps still cannot show SST in CC
+  ## v1.3.6
+  - Keep the laptop CC menu above the progress bar
+  - Add Find / Offset buttons next to CC on Jellyfin Web
+  - Native Android TV / Fire TV / Apple TV apps still cannot show SST
 
