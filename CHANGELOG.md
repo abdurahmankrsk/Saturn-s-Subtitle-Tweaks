@@ -2,6 +2,15 @@
 
 All notable changes to Saturn's Subtitle Tweaks (SST) will be documented in this file.
 
+## [1.1.2] - 2026-08-18
+
+### Fixed
+- SST client script is now injected into `/web/index.html` on every page load via ASP.NET middleware (no File Transformation required)
+- Script is also served at `/web/sst.js` so a missing `/sst/ClientScript` route cannot hide the button
+- Subtitle action sheet detection matches Jellyfin 10.11 (title, Off track, Secondary Subtitles)
+- Menu item is cloned from a real action-sheet row so it appears in the CC menu
+- Hooks attach immediately (no wait on plugin configuration)
+
 ## [1.1.1] - 2026-08-18
 
 ### Fixed
