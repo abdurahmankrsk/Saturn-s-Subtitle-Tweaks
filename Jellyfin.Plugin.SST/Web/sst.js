@@ -14,7 +14,7 @@
         return;
     }
 
-    var SST_VERSION = '1.3.2.0';
+    var SST_VERSION = '1.3.3.0';
     var PLUGIN_ID = 'b3a1c2d4-e5f6-4a89-9bcd-1234567890ab';
     var LOG_PREFIX = '[SST]';
     var FIND_SUBTITLES_ID = 'sst-find-subtitles';
@@ -361,16 +361,216 @@
         return '';
     }
 
-    async function getItemSubtitleStreams(itemId) {
-        var api = getApiClient();
-        if (!api || typeof api.getItem !== 'function') {
-            return [];
+    function normalizeLang(code) {
+        var c = String(code || '').toLowerCase().trim();
+        if (c === 'en' || c === 'english') {
+            return 'eng';
         }
-        var userId = typeof api.getCurrentUserId === 'function' ? api.getCurrentUserId() : '';
-        var item = await api.getItem(userId, itemId);
-        return (item && item.MediaStreams ? item.MediaStreams : []).filter(function (s) {
+        if (c === 'hr' || c === 'cro' || c === 'croatian' || c === 'hrvatski') {
+            return 'hrv';
+        }
+        if (c === 'sr' || c === 'serbian') {
+            return 'srp';
+        }
+        if (c === 'bs' || c === 'bosnian') {
+            return 'bos';
+        }
+        return c;
+    }
+
+    function streamLang(stream) {
+        return normalizeLang(stream.Language || stream.ThreeLetterISOLanguageName || stream.TwoLetterISOLanguageName || '');
+    }
+
+    function streamLabel(stream) {
+        return String(stream.DisplayTitle || stream.Title || stream.Path || stream.Comment || '');
+    }
+
+    function isConflictingLanguage(stream, preferred) {
+        var pref = normalizeLang(preferred);
+        if (!pref) {
+            return false;
+        }
+        var lang = streamLang(stream);
+        var label = streamLabel(stream).toLowerCase();
+        if (pref === 'eng') {
+            if (lang === 'hrv' || lang === 'srp' || lang === 'bos' || lang === 'slv') {
+                return true;
+            }
+            if (/\b(croatian|hrvatski|serbian|bosnian|slovenian|hrv|srp)\b/.test(label) ||
+                /(^|[^a-z])hr([^a-z]|$)/.test(label)) {
+                return true;
+            }
+        }
+        if (lang && lang !== pref && lang.length === 3) {
+            return true;
+        }
+        return false;
+    }
+
+    function isPreferredLanguage(stream, preferred) {
+        var pref = normalizeLang(preferred);
+        if (!pref) {
+            return false;
+        }
+        if (streamLang(stream) === pref) {
+            return true;
+        }
+        var label = streamLabel(stream);
+        if (pref === 'eng' && /\b(english|eng)\b/i.test(label) && !isConflictingLanguage(stream, preferred)) {
+            return true;
+        }
+        return false;
+    }
+
+    function matchesReleaseName(stream, releaseName) {
+        if (!releaseName || releaseName.length < 8) {
+            return false;
+        }
+        var label = streamLabel(stream).toLowerCase();
+        var needle = String(releaseName).toLowerCase().replace(/\s+/g, '.');
+        var shortNeedle = needle.split('.hdtv')[0].split('.web')[0].split('.bluray')[0];
+        return label.indexOf(needle) !== -1 || (shortNeedle.length > 10 && label.indexOf(shortNeedle) !== -1);
+    }
+
+    function vttConflictsWithLanguage(vttText, preferred) {
+        var pref = normalizeLang(preferred);
+        if (pref !== 'eng') {
+            return false;
+        }
+        var sample = String(vttText || '').slice(0, 20000);
+        var marks = sample.match(/[čćžšđČĆŽŠĐ]/g);
+        return !!(marks && marks.length >= 3);
+    }
+
+    function vttSignature(vttText) {
+        var text = String(vttText || '').replace(/\s+/g, ' ').slice(0, 1800);
+        var hash = 2166136261;
+        for (var i = 0; i < text.length; i++) {
+            hash ^= text.charCodeAt(i);
+            hash = Math.imul(hash, 16777619);
+        }
+        return (hash >>> 0).toString(16) + ':' + text.length;
+    }
+
+    function subtitleStreamsFromItem(item) {
+        return ((item && item.MediaStreams) || []).filter(function (s) {
             return s.Type === 'Subtitle';
         });
+    }
+
+    function mergeSubtitleStreams(lists) {
+        var byIndex = {};
+        for (var i = 0; i < lists.length; i++) {
+            var list = lists[i] || [];
+            for (var j = 0; j < list.length; j++) {
+                byIndex[list[j].Index] = list[j];
+            }
+        }
+        return Object.keys(byIndex).map(function (key) {
+            return byIndex[key];
+        });
+    }
+
+    async function fetchPlaybackInfo(itemId) {
+        var api = getApiClient();
+        if (!api || !itemId) {
+            return null;
+        }
+        var userId = typeof api.getCurrentUserId === 'function' ? api.getCurrentUserId() : '';
+        try {
+            if (typeof api.getPlaybackInfo === 'function') {
+                return await api.getPlaybackInfo(itemId, userId);
+            }
+        } catch (e) {
+            console.debug(LOG_PREFIX, 'getPlaybackInfo failed', e);
+        }
+        if (typeof api.ajax !== 'function') {
+            return null;
+        }
+        try {
+            return await api.ajax({
+                type: 'POST',
+                url: api.getUrl('Items/' + itemId + '/PlaybackInfo', userId ? { UserId: userId } : {}),
+                data: JSON.stringify({ UserId: userId, AutoOpenLiveStream: false }),
+                contentType: 'application/json',
+                dataType: 'json'
+            });
+        } catch (e) {
+            console.debug(LOG_PREFIX, 'PlaybackInfo request failed', e);
+            return null;
+        }
+    }
+
+    async function getItemSubtitleStreams(itemId) {
+        var api = getApiClient();
+        var lists = [];
+        var mediaSourceId = null;
+        if (api && typeof api.getItem === 'function') {
+            try {
+                var userId = typeof api.getCurrentUserId === 'function' ? api.getCurrentUserId() : '';
+                var item = await api.getItem(userId, itemId);
+                lists.push(subtitleStreamsFromItem(item));
+            } catch (e) {
+                console.debug(LOG_PREFIX, 'getItem subtitle streams failed', e);
+            }
+        }
+        try {
+            var info = await fetchPlaybackInfo(itemId);
+            var sources = (info && info.MediaSources) || [];
+            for (var i = 0; i < sources.length; i++) {
+                lists.push(subtitleStreamsFromItem(sources[i]));
+                if (!mediaSourceId && sources[i] && sources[i].Id) {
+                    mediaSourceId = sources[i].Id;
+                }
+            }
+        } catch (e) {
+            console.debug(LOG_PREFIX, 'playback subtitle streams failed', e);
+        }
+        return {
+            streams: mergeSubtitleStreams(lists),
+            mediaSourceId: mediaSourceId
+        };
+    }
+
+    function rankApplyCandidates(subs, previousIndexes, preferredLanguage, releaseName) {
+        var previous = previousIndexes || [];
+        var ranked = [];
+        for (var i = 0; i < subs.length; i++) {
+            var stream = subs[i];
+            if (isConflictingLanguage(stream, preferredLanguage)) {
+                continue;
+            }
+            var isNew = previous.indexOf(stream.Index) === -1;
+            var score = stream.Index || 0;
+            if (isNew) {
+                score += 2000;
+            }
+            if (isPreferredLanguage(stream, preferredLanguage)) {
+                score += 1000;
+            }
+            if (matchesReleaseName(stream, releaseName)) {
+                score += 800;
+            }
+            ranked.push({ stream: stream, score: score });
+        }
+        ranked.sort(function (a, b) {
+            return b.score - a.score;
+        });
+        return ranked;
+    }
+
+    async function snapshotExistingVtts(itemId, mediaSourceId, streams) {
+        var signatures = {};
+        var tasks = (streams || []).map(function (stream) {
+            return fetchSubtitleVtt(itemId, mediaSourceId, stream.Index).then(function (vtt) {
+                signatures[vttSignature(vtt)] = stream.Index;
+            }).catch(function () {
+                return null;
+            });
+        });
+        await Promise.all(tasks);
+        return signatures;
     }
 
     function getVideoElement() {
@@ -550,37 +750,54 @@
         return response.text();
     }
 
-    async function waitForNewSubtitleStream(itemId, previousIndexes) {
-        var baseline = (previousIndexes || []).slice();
-        for (var attempt = 0; attempt < 12; attempt++) {
+    async function activateDownloadedTrack(itemId, mediaSourceId, previousIndexes, preferredLanguage, releaseName, existingSignatures) {
+        await turnOffAllSubtitles();
+        var known = existingSignatures || {};
+        var tried = {};
+        var pref = normalizeLang(preferredLanguage);
+
+        for (var attempt = 0; attempt < 20; attempt++) {
             if (attempt > 0) {
-                await sleep(150);
+                await sleep(200);
             }
             try {
-                var subs = await getItemSubtitleStreams(itemId);
-                if (!baseline.length) {
-                    baseline = subs.map(function (s) {
-                        return s.Index;
-                    });
-                    continue;
-                }
-                var newest = null;
-                for (var i = 0; i < subs.length; i++) {
-                    if (baseline.indexOf(subs[i].Index) !== -1) {
+                var snapshot = await getItemSubtitleStreams(itemId);
+                var sourceId = snapshot.mediaSourceId || mediaSourceId;
+                var ranked = rankApplyCandidates(snapshot.streams, previousIndexes || [], pref, releaseName);
+                for (var i = 0; i < ranked.length; i++) {
+                    var stream = ranked[i].stream;
+                    var key = String(stream.Index);
+                    if (tried[key]) {
                         continue;
                     }
-                    if (!newest || subs[i].Index > newest.Index) {
-                        newest = subs[i];
+                    try {
+                        var vtt = await fetchSubtitleVtt(itemId, sourceId, stream.Index);
+                        var signature = vttSignature(vtt);
+                        if (known[signature]) {
+                            console.info(LOG_PREFIX, 'Skipped existing subtitle stream ' + stream.Index);
+                            tried[key] = true;
+                            continue;
+                        }
+                        if (vttConflictsWithLanguage(vtt, pref)) {
+                            console.info(LOG_PREFIX, 'Skipped stream ' + stream.Index + ' because the file is not ' + pref);
+                            tried[key] = true;
+                            continue;
+                        }
+                        if (applyVttCuesToVideo(vtt)) {
+                            console.info(LOG_PREFIX, 'Applied downloaded subtitle stream ' + stream.Index +
+                                ' (' + (streamLang(stream) || streamLabel(stream) || 'unknown') + ')');
+                            return true;
+                        }
+                    } catch (e) {
+                        console.debug(LOG_PREFIX, 'candidate stream ' + stream.Index + ' failed', e);
                     }
-                }
-                if (newest && subs.length > baseline.length) {
-                    return newest;
+                    tried[key] = true;
                 }
             } catch (e) {
-                console.debug(LOG_PREFIX, 'subtitle stream poll failed', e);
+                console.debug(LOG_PREFIX, 'subtitle apply poll failed', e);
             }
         }
-        return null;
+        return false;
     }
 
     async function tryPlayerSetSubtitleIndex(index) {
@@ -646,25 +863,6 @@
         hidePlayerSubtitleOverlay();
         await tryPlayerSetSubtitleIndex(-1);
         await trySessionSetSubtitleIndex(-1);
-    }
-
-    async function activateDownloadedTrack(itemId, mediaSourceId, previousIndexes) {
-        await turnOffAllSubtitles();
-
-        var latest = await waitForNewSubtitleStream(itemId, previousIndexes || []);
-        if (!latest) {
-            return false;
-        }
-
-        var applied = false;
-        try {
-            var vtt = await fetchSubtitleVtt(itemId, mediaSourceId, latest.Index);
-            applied = applyVttCuesToVideo(vtt);
-        } catch (e) {
-            console.debug(LOG_PREFIX, 'direct VTT apply failed', e);
-        }
-
-        return applied;
     }
 
     function applyTextTrackOffset(absoluteSeconds) {
@@ -823,7 +1021,8 @@
             '  <div class="sst-result-header">' +
             '    <div class="sst-result-index">' + (index + 1) + '</div>' +
             '    <div class="sst-result-title">' + escapeHtml(releaseName) + '</div>' +
-            '    <button type="button" class="sst-btn sst-btn-download" data-subtitle-id="' + escapeHtml(sub.Id) + '" title="Download">⬇</button>' +
+            '    <button type="button" class="sst-btn sst-btn-download" data-subtitle-id="' + escapeHtml(sub.Id) +
+            '" data-name="' + escapeHtml(releaseName) + '" title="Download">⬇</button>' +
             '  </div>' +
             (badges.length ? '  <div class="sst-result-badges">' + badges.join('') + '</div>' : '') +
             (metaItems.length ? '  <div class="sst-result-meta">' + metaItems.join('') + '</div>' : '') +
@@ -1076,7 +1275,14 @@
             for (var j = 0; j < downloadBtns.length; j++) {
                 downloadBtns[j].addEventListener('click', function (e) {
                     e.stopPropagation();
-                    performDownload(playing, this.getAttribute('data-subtitle-id'), this, dialog);
+                    performDownload(
+                        playing,
+                        this.getAttribute('data-subtitle-id'),
+                        this,
+                        dialog,
+                        dialog.querySelector('#sst-language').value,
+                        this.getAttribute('data-name') || ''
+                    );
                 });
             }
         } catch (error) {
@@ -1088,7 +1294,7 @@
         }
     }
 
-    async function performDownload(playing, subtitleId, button, dialog) {
+    async function performDownload(playing, subtitleId, button, dialog, preferredLanguage, releaseName) {
         var originalHtml = button.innerHTML;
         button.disabled = true;
         button.innerHTML = '…';
@@ -1096,12 +1302,21 @@
 
         try {
             var previousIndexes = [];
+            var existingSignatures = {};
+            var language = normalizeLang(preferredLanguage || (dialog.querySelector('#sst-language') && dialog.querySelector('#sst-language').value) || 'eng');
             try {
-                previousIndexes = (await getItemSubtitleStreams(playing.itemId)).map(function (s) {
+                var before = await getItemSubtitleStreams(playing.itemId);
+                previousIndexes = (before.streams || []).map(function (s) {
                     return s.Index;
                 });
+                existingSignatures = await snapshotExistingVtts(
+                    playing.itemId,
+                    before.mediaSourceId || playing.mediaSourceId,
+                    before.streams || []
+                );
             } catch (e) {
                 previousIndexes = [];
+                existingSignatures = {};
             }
             await downloadSubtitle(playing.itemId, subtitleId);
             button.innerHTML = '✓';
@@ -1109,7 +1324,14 @@
             statusEl.className = 'sst-status sst-status-success';
             statusEl.style.display = 'block';
 
-            var activated = await activateDownloadedTrack(playing.itemId, playing.mediaSourceId, previousIndexes);
+            var activated = await activateDownloadedTrack(
+                playing.itemId,
+                playing.mediaSourceId,
+                previousIndexes,
+                language,
+                releaseName,
+                existingSignatures
+            );
             if (activated) {
                 statusEl.innerHTML = 'Subtitle downloaded and applied. Other tracks were turned off for this playback.';
                 playing.subtitleCount = previousIndexes.length + 1;
@@ -1283,6 +1505,7 @@
             sheet.querySelector('[data-id="' + OFFSET_ID + '"]');
 
         if (findItem && offsetItem) {
+            scheduleConstrainActionSheet(sheet);
             return;
         }
 
@@ -1316,6 +1539,67 @@
 
         if (injected) {
             console.info(LOG_PREFIX, 'Injected SST items at top of subtitle action sheet');
+        }
+        scheduleConstrainActionSheet(sheet);
+    }
+
+    function scheduleConstrainActionSheet(sheet) {
+        [0, 50, 150, 400].forEach(function (delay) {
+            setTimeout(function () {
+                constrainActionSheetScroller(sheet);
+            }, delay);
+        });
+    }
+
+    function constrainActionSheetScroller(sheet) {
+        if (!sheet || !sheet.isConnected) {
+            return;
+        }
+
+        sheet.classList.add('sst-cc-constrained');
+        sheet.style.removeProperty('transform');
+
+        var scroller = sheet.querySelector('.actionSheetScroller');
+        var sheetRect = sheet.getBoundingClientRect();
+        var viewportH = (window.visualViewport && window.visualViewport.height) || window.innerHeight || 0;
+        var bottomLimit = viewportH - 8;
+        var osd = document.querySelector('.videoOsdBottom');
+        if (osd) {
+            var osdTop = osd.getBoundingClientRect().top;
+            if (osdTop > 80 && osdTop < bottomLimit) {
+                bottomLimit = osdTop - 8;
+            }
+        }
+
+        var available = Math.floor(bottomLimit - sheetRect.top);
+        if (available < 160) {
+            var height = Math.min(
+                Math.max(sheet.offsetHeight, 200),
+                Math.floor(viewportH * 0.6),
+                Math.max(160, bottomLimit - 16)
+            );
+            var shift = Math.round((bottomLimit - height) - sheetRect.top);
+            if (shift < 0) {
+                sheet.style.transform = 'translateY(' + shift + 'px)';
+            }
+            available = height;
+        }
+
+        if (available >= 120) {
+            sheet.style.maxHeight = available + 'px';
+            sheet.style.overflow = 'hidden';
+        }
+
+        if (!scroller) {
+            return;
+        }
+
+        var title = sheet.querySelector('.actionSheetTitle');
+        var topUsed = title ? Math.max(0, title.getBoundingClientRect().bottom - sheet.getBoundingClientRect().top) : 0;
+        var max = Math.floor(available - topUsed - 8);
+        if (max >= 96) {
+            scroller.style.maxHeight = max + 'px';
+            scroller.style.overflowY = 'auto';
         }
     }
 
