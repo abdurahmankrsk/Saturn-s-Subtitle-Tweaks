@@ -1,6 +1,6 @@
 name: "Saturn's Subtitle Tweaks"
 guid: "b3a1c2d4-e5f6-4a89-9bcd-1234567890ab"
-version: 16
+version: 17
 targetAbi: "10.11.0.0"
 framework: "net9.0"
 owner: "community"
@@ -13,6 +13,7 @@ category: "Subtitles"
 artifacts:
   - "Jellyfin.Plugin.SST.dll"
 changelog: |-
-  ## v1.2.3
-  - CC menu item label is now 🪐 Find Subtitles
+  ## v1.3.0
+  - Separate 🪐 Find Subtitles and 🪐 Subtitle Offset CC items
+  - Downloaded subtitles now apply to the current playback
 
