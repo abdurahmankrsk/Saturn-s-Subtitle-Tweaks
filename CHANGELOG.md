@@ -2,6 +2,14 @@
 
 All notable changes to Saturn's Subtitle Tweaks (SST) will be documented in this file.
 
+## [1.3.0] - 2026-08-18
+
+### Added
+- Separate CC menu items: **🪐 Find Subtitles** and **🪐 Subtitle Offset**
+
+### Fixed
+- Downloaded subtitles are fetched as VTT and rendered on the current video instead of only saving a library file
+
 ## [1.2.3] - 2026-08-18
 
 ### Changed
