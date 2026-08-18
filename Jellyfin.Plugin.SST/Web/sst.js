@@ -14,12 +14,15 @@
         return;
     }
 
-    var SST_VERSION = '1.2.3.0';
+    var SST_VERSION = '1.3.0.0';
     var PLUGIN_ID = 'b3a1c2d4-e5f6-4a89-9bcd-1234567890ab';
     var LOG_PREFIX = '[SST]';
     var FIND_SUBTITLES_ID = 'sst-find-subtitles';
     var FIND_SUBTITLES_LABEL = '🪐 Find Subtitles';
+    var OFFSET_ID = 'sst-subtitle-offset';
+    var OFFSET_LABEL = '🪐 Subtitle Offset';
     var INJECTED_ITEM_CLASS = 'sst-find-subtitles-item';
+    var OFFSET_ITEM_CLASS = 'sst-offset-item';
 
     var COMMON_LANGUAGES = [
         { code: 'eng', name: 'English' },
@@ -59,6 +62,8 @@
     var isDialogOpen = false;
     var observer = null;
     var subtitleButtonListenerAttached = false;
+    var sstOverlayTimer = null;
+    var sstOverlayCues = [];
     var currentOffset = 0;
     var lastItemId = null;
     var cueBaseTimes = typeof WeakMap === 'function' ? new WeakMap() : null;
@@ -342,65 +347,316 @@
         return fetch(url, { method: 'POST', credentials: 'same-origin' });
     }
 
-    async function activateDownloadedTrack(itemId, previousCount) {
+    function getAccessToken(api) {
+        try {
+            if (api && typeof api.accessToken === 'function') {
+                return api.accessToken();
+            }
+            if (api && api.accessToken) {
+                return api.accessToken;
+            }
+        } catch (e) {
+            return '';
+        }
+        return '';
+    }
+
+    async function getItemSubtitleStreams(itemId) {
         var api = getApiClient();
         if (!api || typeof api.getItem !== 'function') {
+            return [];
+        }
+        var userId = typeof api.getCurrentUserId === 'function' ? api.getCurrentUserId() : '';
+        var item = await api.getItem(userId, itemId);
+        return (item && item.MediaStreams ? item.MediaStreams : []).filter(function (s) {
+            return s.Type === 'Subtitle';
+        });
+    }
+
+    function getVideoElement() {
+        return document.querySelector('video.htmlvideoplayer') ||
+            document.querySelector('.videoPlayerContainer video') ||
+            document.querySelector('video');
+    }
+
+    function parseVttTimestamp(value) {
+        var ts = String(value || '').trim().split(' ')[0].replace(',', '.');
+        var parts = ts.split(':');
+        if (parts.length === 3) {
+            return (parseFloat(parts[0]) || 0) * 3600 + (parseFloat(parts[1]) || 0) * 60 + (parseFloat(parts[2]) || 0);
+        }
+        if (parts.length === 2) {
+            return (parseFloat(parts[0]) || 0) * 60 + (parseFloat(parts[1]) || 0);
+        }
+        return parseFloat(ts) || 0;
+    }
+
+    function parseVttCues(text) {
+        var cues = [];
+        var normalized = String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        var blocks = normalized.split(/\n\n+/);
+        for (var i = 0; i < blocks.length; i++) {
+            var lines = blocks[i].split('\n').filter(function (line) {
+                return line.length;
+            });
+            if (!lines.length) {
+                continue;
+            }
+            var timeIndex = lines[0].indexOf('-->') === -1 && lines.length > 1 ? 1 : 0;
+            var timeLine = lines[timeIndex];
+            if (!timeLine || timeLine.indexOf('-->') === -1) {
+                continue;
+            }
+            var times = timeLine.split('-->');
+            var start = parseVttTimestamp(times[0]);
+            var end = parseVttTimestamp(times[1]);
+            var body = lines.slice(timeIndex + 1).join('\n');
+            if (body) {
+                cues.push({ start: start, end: end, text: body });
+            }
+        }
+        return cues;
+    }
+
+    function hidePlayerSubtitleOverlay() {
+        var overlay = document.querySelector('.videoSubtitles');
+        if (overlay) {
+            overlay.style.display = 'none';
+        }
+        var video = getVideoElement();
+        if (!video || !video.textTracks) {
+            return;
+        }
+        for (var i = 0; i < video.textTracks.length; i++) {
+            try {
+                video.textTracks[i].mode = 'disabled';
+            } catch (e) {
+                console.debug(LOG_PREFIX, 'hide textTrack failed', e);
+            }
+        }
+    }
+
+    function stopSstOverlay() {
+        if (sstOverlayTimer) {
+            clearInterval(sstOverlayTimer);
+            sstOverlayTimer = null;
+        }
+        var overlay = document.getElementById('sst-subtitle-overlay');
+        if (overlay && overlay.parentNode) {
+            overlay.parentNode.removeChild(overlay);
+        }
+    }
+
+    function ensureSstOverlay() {
+        var overlay = document.getElementById('sst-subtitle-overlay');
+        if (overlay) {
+            return overlay;
+        }
+        overlay = document.createElement('div');
+        overlay.id = 'sst-subtitle-overlay';
+        overlay.className = 'sst-subtitle-overlay';
+        var host = document.querySelector('.videoPlayerContainer');
+        if (host) {
+            host.appendChild(overlay);
+        } else {
+            overlay.style.position = 'fixed';
+            document.body.appendChild(overlay);
+        }
+        return overlay;
+    }
+
+    function startSstOverlay(cues) {
+        stopSstOverlay();
+        sstOverlayCues = cues || [];
+        var overlay = ensureSstOverlay();
+        sstOverlayTimer = setInterval(function () {
+            var video = getVideoElement();
+            if (!video) {
+                return;
+            }
+            var t = video.currentTime;
+            var offset = currentOffset || 0;
+            var lines = [];
+            for (var i = 0; i < sstOverlayCues.length; i++) {
+                var cue = sstOverlayCues[i];
+                if (t >= cue.start + offset && t <= cue.end + offset) {
+                    lines.push(cue.text);
+                }
+            }
+            overlay.innerHTML = lines.map(function (line) {
+                return '<div class="sst-subtitle-line">' + escapeHtml(line).replace(/\n/g, '<br>') + '</div>';
+            }).join('');
+            overlay.style.display = lines.length ? 'block' : 'none';
+        }, 80);
+    }
+
+    function applyVttCuesToVideo(vttText) {
+        var cues = parseVttCues(vttText);
+        if (!cues.length) {
             return false;
         }
+        hidePlayerSubtitleOverlay();
+        startSstOverlay(cues);
+        console.info(LOG_PREFIX, 'Applied ' + cues.length + ' subtitle cues to current playback');
+        return true;
+    }
 
-        var userId = typeof api.getCurrentUserId === 'function' ? api.getCurrentUserId() : '';
-        var latest = null;
+    async function fetchSubtitleVtt(itemId, mediaSourceId, index) {
+        var api = getApiClient();
+        var params = {};
+        var token = getAccessToken(api);
+        if (token) {
+            params.api_key = token;
+        }
+        var url = api.getUrl(
+            'Videos/' + itemId + '/' + (mediaSourceId || itemId) + '/Subtitles/' + index + '/Stream.vtt',
+            params
+        );
 
-        for (var attempt = 0; attempt < 12; attempt++) {
-            await sleep(500);
+        if (typeof api.ajax === 'function') {
             try {
-                var item = await api.getItem(userId, itemId);
-                var subs = (item.MediaStreams || []).filter(function (s) {
-                    return s.Type === 'Subtitle';
-                });
-                if (subs.length > previousCount) {
-                    latest = subs[subs.length - 1];
-                    break;
+                var result = await api.ajax({ type: 'GET', url: url, dataType: 'text' });
+                if (typeof result === 'string' && result.length) {
+                    return result;
                 }
             } catch (e) {
-                console.debug(LOG_PREFIX, 'item refresh failed', e);
+                console.debug(LOG_PREFIX, 'ajax VTT fetch failed, trying fetch()', e);
             }
         }
 
+        var headers = {};
+        if (token) {
+            headers['X-Emby-Token'] = token;
+            headers.Authorization = 'MediaBrowser Token="' + token + '"';
+        }
+        var response = await fetch(url, { method: 'GET', credentials: 'same-origin', headers: headers });
+        if (!response.ok) {
+            throw new Error('Subtitle stream HTTP ' + response.status);
+        }
+        return response.text();
+    }
+
+    async function refreshItemLight(itemId) {
+        var api = getApiClient();
+        if (!api || typeof api.ajax !== 'function') {
+            return;
+        }
+        try {
+            await api.ajax({
+                type: 'POST',
+                url: api.getUrl('Items/' + itemId + '/Refresh', {
+                    Recursive: false,
+                    MetadataRefreshMode: 'None',
+                    ImageRefreshMode: 'None',
+                    ReplaceAllMetadata: false,
+                    ReplaceAllImages: false
+                })
+            });
+        } catch (e) {
+            console.debug(LOG_PREFIX, 'item refresh failed', e);
+        }
+    }
+
+    async function waitForNewSubtitleStream(itemId, previousIndexes) {
+        var latest = null;
+        for (var attempt = 0; attempt < 16; attempt++) {
+            if (attempt === 4) {
+                await refreshItemLight(itemId);
+            }
+            await sleep(attempt < 4 ? 400 : 700);
+            try {
+                var subs = await getItemSubtitleStreams(itemId);
+                for (var i = subs.length - 1; i >= 0; i--) {
+                    if (previousIndexes.indexOf(subs[i].Index) === -1) {
+                        latest = subs[i];
+                        break;
+                    }
+                }
+                if (latest) {
+                    return latest;
+                }
+            } catch (e) {
+                console.debug(LOG_PREFIX, 'subtitle stream poll failed', e);
+            }
+        }
+        return null;
+    }
+
+    async function tryPlayerSetSubtitleIndex(index) {
+        var pbm = getPlaybackManager();
+        if (!pbm || typeof pbm.setSubtitleStreamIndex !== 'function') {
+            return false;
+        }
+        try {
+            var player = null;
+            if (typeof pbm.getPlayer === 'function') {
+                player = pbm.getPlayer();
+            } else if (typeof pbm.getCurrentPlayer === 'function') {
+                player = pbm.getCurrentPlayer();
+            }
+            if (player && player._currentPlayOptions && player._currentPlayOptions.mediaSource) {
+                var streams = player._currentPlayOptions.mediaSource.MediaStreams || [];
+                var hasStream = streams.some(function (s) {
+                    return s.Type === 'Subtitle' && s.Index === index;
+                });
+                if (!hasStream) {
+                    streams.push({ Type: 'Subtitle', Index: index, IsExternal: true, DeliveryMethod: 'External', IsTextSubtitleStream: true });
+                    player._currentPlayOptions.mediaSource.MediaStreams = streams;
+                }
+            }
+            if (player) {
+                pbm.setSubtitleStreamIndex(index, player);
+            } else {
+                pbm.setSubtitleStreamIndex(index);
+            }
+            return true;
+        } catch (e) {
+            console.debug(LOG_PREFIX, 'setSubtitleStreamIndex failed', e);
+            return false;
+        }
+    }
+
+    async function trySessionSetSubtitleIndex(index) {
+        var api = getApiClient();
+        var ctx = await getPlayingContext();
+        if (!api || !ctx || !ctx.sessionId || typeof api.ajax !== 'function') {
+            return false;
+        }
+        try {
+            await api.ajax({
+                type: 'POST',
+                url: api.getUrl('Sessions/' + ctx.sessionId + '/Command'),
+                data: JSON.stringify({
+                    Name: 'SetSubtitleStreamIndex',
+                    Arguments: { Index: String(index) }
+                }),
+                contentType: 'application/json'
+            });
+            return true;
+        } catch (e) {
+            console.debug(LOG_PREFIX, 'session subtitle command failed', e);
+            return false;
+        }
+    }
+
+    async function activateDownloadedTrack(itemId, mediaSourceId, previousIndexes) {
+        var latest = await waitForNewSubtitleStream(itemId, previousIndexes || []);
         if (!latest) {
             return false;
         }
 
-        var index = latest.Index;
-        var pbm = getPlaybackManager();
-        if (pbm && typeof pbm.setSubtitleStreamIndex === 'function') {
-            try {
-                pbm.setSubtitleStreamIndex(index);
-                return true;
-            } catch (e) {
-                console.debug(LOG_PREFIX, 'setSubtitleStreamIndex failed', e);
-            }
+        var applied = false;
+        try {
+            var vtt = await fetchSubtitleVtt(itemId, mediaSourceId, latest.Index);
+            applied = applyVttCuesToVideo(vtt);
+        } catch (e) {
+            console.debug(LOG_PREFIX, 'direct VTT apply failed', e);
         }
 
-        var ctx = await getPlayingContext();
-        if (ctx && ctx.sessionId && typeof api.ajax === 'function') {
-            try {
-                await api.ajax({
-                    type: 'POST',
-                    url: api.getUrl('Sessions/' + ctx.sessionId + '/Command'),
-                    data: JSON.stringify({
-                        Name: 'SetSubtitleStreamIndex',
-                        Arguments: { Index: String(index) }
-                    }),
-                    contentType: 'application/json'
-                });
-                return true;
-            } catch (e) {
-                console.debug(LOG_PREFIX, 'session subtitle command failed', e);
-            }
-        }
+        await tryPlayerSetSubtitleIndex(latest.Index);
+        await trySessionSetSubtitleIndex(latest.Index);
 
-        return false;
+        return applied;
     }
 
     function applyTextTrackOffset(absoluteSeconds) {
@@ -476,6 +732,8 @@
     function resetOffsetIfItemChanged(itemId) {
         if (itemId !== lastItemId) {
             lastItemId = itemId;
+            stopSstOverlay();
+            sstOverlayCues = [];
             if (currentOffset !== 0) {
                 applySubtitleOffset(0);
             }
@@ -576,26 +834,29 @@
         display.className = currentOffset === 0 ? '' : (currentOffset > 0 ? 'sst-offset-positive' : 'sst-offset-negative');
     }
 
-    async function showDialog() {
-        if (isDialogOpen) {
-            return;
-        }
+    async function showFindDialog() {
+        await mountDialog(buildFindDialogHtml, function (dialog, playing, languageOptions) {
+            bindFindDialogEvents(dialog, playing, languageOptions);
+            if (playing && playing.itemId) {
+                performSearch(playing, dialog.querySelector('#sst-language').value, dialog, languageOptions);
+            }
+        });
+    }
 
-        isDialogOpen = true;
-        var playing = await getPlayingContext();
-        resetOffsetIfItemChanged(playing ? playing.itemId : null);
+    async function showOffsetDialog() {
+        await mountDialog(buildOffsetDialogHtml, function (dialog) {
+            bindOffsetDialogEvents(dialog);
+            updateOffsetDisplay(dialog);
+        });
+    }
 
-        var languages = await getLanguageChoices();
+    function buildFindDialogHtml(playing, languages) {
         var languageOptions = languages.options.map(function (lang) {
             var selected = lang.code === languages.selected ? ' selected' : '';
             return '<option value="' + escapeHtml(lang.code) + '"' + selected + '>' + escapeHtml(lang.name) + '</option>';
         }).join('');
 
-        var dialog = document.createElement('div');
-        dialog.id = 'sst-dialog';
-        dialog.className = 'sst-dialog';
-        dialog.innerHTML =
-            '<div class="sst-dialog-backdrop" id="sst-backdrop"></div>' +
+        return '<div class="sst-dialog-backdrop" id="sst-backdrop"></div>' +
             '<div class="sst-dialog-content">' +
             '  <div class="sst-dialog-header">' +
             '    <h2 class="sst-dialog-title">' + FIND_SUBTITLES_LABEL + '</h2>' +
@@ -615,9 +876,23 @@
             '    <div id="sst-status" class="sst-status" style="display:none;"></div>' +
             '    <div id="sst-results" class="sst-results"></div>' +
             '  </div>' +
-            '  <div class="sst-dialog-footer">' +
+            '</div>';
+    }
+
+    function buildOffsetDialogHtml(playing) {
+        return '<div class="sst-dialog-backdrop" id="sst-backdrop"></div>' +
+            '<div class="sst-dialog-content sst-dialog-content-compact">' +
+            '  <div class="sst-dialog-header">' +
+            '    <h2 class="sst-dialog-title">' + OFFSET_LABEL + '</h2>' +
+            '    <button type="button" class="sst-close-btn" id="sst-close-btn" title="Close" aria-label="Close">✕</button>' +
+            '  </div>' +
+            '  <div class="sst-dialog-body">' +
+            '    <div class="sst-media-info" id="sst-media-info">' +
+            escapeHtml(playing ? playing.title : 'Start playback to adjust subtitle timing.') +
+            '    </div>' +
             '    <div class="sst-offset-controls">' +
-            '      <div class="sst-offset-label">Subtitle delay: <span id="sst-offset-value">0.0s</span> <span class="sst-status-hint">(this playback only)</span></div>' +
+            '      <div class="sst-offset-label">Subtitle delay: <span id="sst-offset-value">0.0s</span></div>' +
+            '      <div class="sst-status-hint">This playback only. Does not edit subtitle files.</div>' +
             '      <div class="sst-offset-buttons">' +
             '        <button type="button" class="sst-btn sst-btn-offset" data-offset="-0.5">-0.5s</button>' +
             '        <button type="button" class="sst-btn sst-btn-offset" data-offset="-0.1">-0.1s</button>' +
@@ -628,6 +903,20 @@
             '    </div>' +
             '  </div>' +
             '</div>';
+    }
+
+    async function mountDialog(htmlBuilder, afterMount) {
+        closeDialog(true);
+
+        isDialogOpen = true;
+        var playing = await getPlayingContext();
+        resetOffsetIfItemChanged(playing ? playing.itemId : null);
+        var languages = await getLanguageChoices();
+
+        var dialog = document.createElement('div');
+        dialog.id = 'sst-dialog';
+        dialog.className = 'sst-dialog';
+        dialog.innerHTML = htmlBuilder(playing, languages);
 
         dismissBlockingOverlays();
         getOverlayParent().appendChild(dialog);
@@ -637,31 +926,42 @@
             dialog.classList.add('sst-dialog-open');
         });
 
-        bindDialogEvents(dialog, playing, languages.options);
-        updateOffsetDisplay(dialog);
-
-        if (playing && playing.itemId) {
-            performSearch(playing, dialog.querySelector('#sst-language').value, dialog, languages.options);
-        }
+        bindDialogChrome(dialog);
+        afterMount(dialog, playing, languages.options);
     }
 
-    function closeDialog() {
+    function closeDialog(immediate) {
         var dialog = document.getElementById('sst-dialog');
         if (!dialog) {
             isDialogOpen = false;
             return;
         }
 
-        dialog.classList.remove('sst-dialog-open');
-        setTimeout(function () {
+        function remove() {
             if (dialog.parentNode) {
                 dialog.parentNode.removeChild(dialog);
             }
-            isDialogOpen = false;
+            if (!document.getElementById('sst-dialog')) {
+                isDialogOpen = false;
+            }
+        }
+
+        if (immediate) {
+            remove();
+            return;
+        }
+
+        dialog.classList.remove('sst-dialog-open');
+        setTimeout(function () {
+            if (dialog.isConnected && !dialog.classList.contains('sst-dialog-open')) {
+                remove();
+            } else if (!document.getElementById('sst-dialog')) {
+                isDialogOpen = false;
+            }
         }, 250);
     }
 
-    function bindDialogEvents(dialog, playing, languageOptions) {
+    function bindDialogChrome(dialog) {
         dialog.addEventListener('click', function (e) {
             e.stopPropagation();
         });
@@ -672,8 +972,12 @@
             e.stopPropagation();
         });
 
-        dialog.querySelector('#sst-close-btn').addEventListener('click', closeDialog);
-        dialog.querySelector('#sst-backdrop').addEventListener('click', closeDialog);
+        dialog.querySelector('#sst-close-btn').addEventListener('click', function () {
+            closeDialog();
+        });
+        dialog.querySelector('#sst-backdrop').addEventListener('click', function () {
+            closeDialog();
+        });
 
         var keyHandler = function (e) {
             if (e.key === 'Escape') {
@@ -682,7 +986,9 @@
             }
         };
         document.addEventListener('keydown', keyHandler);
+    }
 
+    function bindFindDialogEvents(dialog, playing, languageOptions) {
         dialog.querySelector('#sst-search-btn').addEventListener('click', function () {
             performSearch(playing, dialog.querySelector('#sst-language').value, dialog, languageOptions);
         });
@@ -692,7 +998,9 @@
                 performSearch(playing, dialog.querySelector('#sst-language').value, dialog, languageOptions);
             }
         });
+    }
 
+    function bindOffsetDialogEvents(dialog) {
         var offsetButtons = dialog.querySelectorAll('.sst-btn-offset');
         for (var i = 0; i < offsetButtons.length; i++) {
             offsetButtons[i].addEventListener('click', function () {
@@ -780,19 +1088,26 @@
         var statusEl = dialog.querySelector('#sst-status');
 
         try {
-            var previousCount = playing.subtitleCount || 0;
+            var previousIndexes = [];
+            try {
+                previousIndexes = (await getItemSubtitleStreams(playing.itemId)).map(function (s) {
+                    return s.Index;
+                });
+            } catch (e) {
+                previousIndexes = [];
+            }
             await downloadSubtitle(playing.itemId, subtitleId);
             button.innerHTML = '✓';
-            statusEl.innerHTML = 'Downloaded. Activating subtitle track…';
+            statusEl.innerHTML = 'Downloaded. Applying to this playback…';
             statusEl.className = 'sst-status sst-status-success';
             statusEl.style.display = 'block';
 
-            var activated = await activateDownloadedTrack(playing.itemId, previousCount);
+            var activated = await activateDownloadedTrack(playing.itemId, playing.mediaSourceId, previousIndexes);
             if (activated) {
-                statusEl.innerHTML = 'Subtitle downloaded and selected. You can adjust timing below.';
-                playing.subtitleCount = previousCount + 1;
+                statusEl.innerHTML = 'Subtitle downloaded and applied to this video. Use 🪐 Subtitle Offset in the CC menu to adjust timing.';
+                playing.subtitleCount = previousIndexes.length + 1;
             } else {
-                statusEl.innerHTML = 'Subtitle downloaded. Re-open the CC menu and select the new track if it is not already on.';
+                statusEl.innerHTML = 'Subtitle downloaded to the library, but it could not be applied automatically. Open the CC menu and select the new track.';
             }
         } catch (error) {
             button.disabled = false;
@@ -859,22 +1174,22 @@
         dismissBlockingOverlays();
     }
 
-    function createFindSubtitlesMenuItem(sheet) {
+    function createSheetMenuItem(sheet, id, label, className, onOpen) {
         var sample = sheet.querySelector('.actionSheetMenuItem');
         var item;
 
         if (sample) {
             item = sample.cloneNode(true);
-            item.classList.add(INJECTED_ITEM_CLASS);
-            item.setAttribute('data-id', FIND_SUBTITLES_ID);
+            item.classList.add(className);
+            item.setAttribute('data-id', id);
             item.removeAttribute('autofocus');
             item.removeAttribute('autoFocus');
 
             var textEl = item.querySelector('.listItemBodyText') || item.querySelector('.listItemBody');
             if (textEl) {
-                textEl.textContent = FIND_SUBTITLES_LABEL;
+                textEl.textContent = label;
             } else {
-                item.textContent = FIND_SUBTITLES_LABEL;
+                item.textContent = label;
             }
 
             var secondary = item.querySelector('.secondaryText, .listItemBody aside, .listItemAside');
@@ -889,13 +1204,13 @@
         } else {
             item = document.createElement('button');
             item.type = 'button';
-            item.className = 'listItem listItem-button actionSheetMenuItem ' + INJECTED_ITEM_CLASS;
-            item.setAttribute('data-id', FIND_SUBTITLES_ID);
+            item.className = 'listItem listItem-button actionSheetMenuItem ' + className;
+            item.setAttribute('data-id', id);
             var body = document.createElement('div');
             body.className = 'listItemBody';
             var text = document.createElement('div');
             text.className = 'listItemBodyText';
-            text.textContent = FIND_SUBTITLES_LABEL;
+            text.textContent = label;
             body.appendChild(text);
             item.appendChild(body);
         }
@@ -907,42 +1222,77 @@
                 e.stopImmediatePropagation();
             }
             closeActionSheet(item.closest('.actionSheet') || item.closest('.dialog'));
-            setTimeout(showDialog, 50);
+            setTimeout(onOpen, 50);
         });
 
         return item;
     }
 
-    function injectFindSubtitlesIntoSheet(sheet) {
+    function injectSstMenuItems(sheet) {
         if (!isSubtitleTrackActionSheet(sheet)) {
-            return;
-        }
-
-        if (sheet.querySelector('.' + INJECTED_ITEM_CLASS) ||
-            sheet.querySelector('[data-id="' + FIND_SUBTITLES_ID + '"]')) {
-            fitActionSheetToViewport(sheet);
             return;
         }
 
         var scroller = sheet.querySelector('.actionSheetScroller') ||
             sheet.querySelector('.actionSheetContent') ||
             sheet;
-        var item = createFindSubtitlesMenuItem(sheet);
-        var firstItem = scroller.querySelector('.actionSheetMenuItem');
-        if (firstItem && firstItem.parentNode) {
-            firstItem.parentNode.insertBefore(item, firstItem);
-        } else if (scroller.firstElementChild) {
-            scroller.insertBefore(item, scroller.firstElementChild);
-        } else {
-            scroller.appendChild(item);
+        var firstNative = null;
+        var menuItems = scroller.querySelectorAll('.actionSheetMenuItem');
+        for (var i = 0; i < menuItems.length; i++) {
+            var dataId = menuItems[i].getAttribute('data-id');
+            if (dataId !== FIND_SUBTITLES_ID && dataId !== OFFSET_ID) {
+                firstNative = menuItems[i];
+                break;
+            }
         }
+
+        var findItem = sheet.querySelector('.' + INJECTED_ITEM_CLASS) ||
+            sheet.querySelector('[data-id="' + FIND_SUBTITLES_ID + '"]');
+        var offsetItem = sheet.querySelector('.' + OFFSET_ITEM_CLASS) ||
+            sheet.querySelector('[data-id="' + OFFSET_ID + '"]');
+
+        if (findItem && offsetItem) {
+            fitActionSheetToViewport(sheet);
+            return;
+        }
+
+        var injected = false;
+
+        if (!findItem) {
+            findItem = createSheetMenuItem(sheet, FIND_SUBTITLES_ID, FIND_SUBTITLES_LABEL, INJECTED_ITEM_CLASS, showFindDialog);
+            injected = true;
+            if (firstNative && firstNative.parentNode) {
+                firstNative.parentNode.insertBefore(findItem, firstNative);
+            } else {
+                scroller.appendChild(findItem);
+            }
+        }
+
+        if (!offsetItem) {
+            offsetItem = createSheetMenuItem(sheet, OFFSET_ID, OFFSET_LABEL, OFFSET_ITEM_CLASS, showOffsetDialog);
+            injected = true;
+            if (findItem && findItem.parentNode) {
+                if (findItem.nextSibling) {
+                    findItem.parentNode.insertBefore(offsetItem, findItem.nextSibling);
+                } else {
+                    findItem.parentNode.appendChild(offsetItem);
+                }
+            } else if (firstNative && firstNative.parentNode) {
+                firstNative.parentNode.insertBefore(offsetItem, firstNative);
+            } else {
+                scroller.appendChild(offsetItem);
+            }
+        }
+
         fitActionSheetToViewport(sheet);
         [0, 50, 160].forEach(function (delay) {
             setTimeout(function () {
                 fitActionSheetToViewport(sheet);
             }, delay);
         });
-        console.info(LOG_PREFIX, 'Injected "' + FIND_SUBTITLES_LABEL + '" at top of subtitle action sheet');
+        if (injected) {
+            console.info(LOG_PREFIX, 'Injected SST items at top of subtitle action sheet');
+        }
     }
 
     function getViewportHeight() {
@@ -1020,13 +1370,13 @@
             }
 
             if (scope.classList && scope.classList.contains('actionSheet')) {
-                injectFindSubtitlesIntoSheet(scope);
+                injectSstMenuItems(scope);
             }
 
             if (scope.querySelectorAll) {
                 var sheets = scope.querySelectorAll('.actionSheet');
                 for (var i = 0; i < sheets.length; i++) {
-                    injectFindSubtitlesIntoSheet(sheets[i]);
+                    injectSstMenuItems(sheets[i]);
                 }
             }
         } catch (e) {
@@ -1109,6 +1459,7 @@
             observer = null;
         }
         subtitleButtonListenerAttached = false;
+        stopSstOverlay();
     }
 
     window.SST = {
@@ -1123,7 +1474,8 @@
             setOffset: applySubtitleOffset
         },
         UI: {
-            show: showDialog,
+            show: showFindDialog,
+            showOffset: showOffsetDialog,
             close: closeDialog
         },
         Integration: {
