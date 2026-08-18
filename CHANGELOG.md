@@ -2,6 +2,14 @@
 
 All notable changes to Saturn's Subtitle Tweaks (SST) will be documented in this file.
 
+## [1.3.5] - 2026-08-18
+
+### Fixed
+- Jellyfin Web TV layout (Samsung/LG/TV display mode): D-pad can open Find Subtitles without breaking the CC sheet
+
+### Notes
+- Official Android TV, Fire TV, Apple TV, and Roku apps still cannot show SST in the CC menu (those apps do not load Jellyfin Web)
+
 ## [1.3.4] - 2026-08-18
 
 ### Fixed
