@@ -13,8 +13,7 @@ category: "Subtitles"
 artifacts:
   - "Jellyfin.Plugin.SST.dll"
 changelog: |-
-  ## v1.1.2
-  - Inject SST into /web/index.html via ASP.NET middleware so the CC menu button can actually appear
-  - Serve /web/sst.js without relying on File Transformation
-  - Match Jellyfin 10.11 subtitle action sheet structure
+  ## v1.2.0
+  - Find subtitles at the top of the CC menu
+  - In-player language search, results, download, and session-only timing offset
 
