@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST/Web/icon.png",
     "versions": [
       {
-        "version": "1.2.3.0",
-        "changelog": "CC menu item and dialog title now read \ud83e\ude90 Find Subtitles.",
+        "version": "1.3.0.0",
+        "changelog": "Separate Find Subtitles and Subtitle Offset CC items. Downloaded subtitles now apply to the current playback.",
         "targetAbi": "10.11.0.0",
         "sourceUrl": "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST.zip",
-        "checksum": "ff78b931b20372fc37ad060d0dfe077f",
-        "timestamp": "2026-08-18T15:26:40Z"
+        "checksum": "8885d5fa25992c069504c5d94d17f822",
+        "timestamp": "2026-08-18T15:38:47Z"
       }
     ]
   }
