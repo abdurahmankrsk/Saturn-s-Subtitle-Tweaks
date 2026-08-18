@@ -14,7 +14,7 @@
         return;
     }
 
-    var SST_VERSION = '1.2.1.0';
+    var SST_VERSION = '1.2.2.0';
     var PLUGIN_ID = 'b3a1c2d4-e5f6-4a89-9bcd-1234567890ab';
     var LOG_PREFIX = '[SST]';
     var FIND_SUBTITLES_ID = 'sst-find-subtitles';
@@ -629,8 +629,11 @@
             '  </div>' +
             '</div>';
 
-        document.body.appendChild(dialog);
+        dismissBlockingOverlays();
+        getOverlayParent().appendChild(dialog);
+        dialog.classList.add('sst-dialog-open');
         requestAnimationFrame(function () {
+            dismissBlockingOverlays();
             dialog.classList.add('sst-dialog-open');
         });
 
@@ -659,6 +662,16 @@
     }
 
     function bindDialogEvents(dialog, playing, languageOptions) {
+        dialog.addEventListener('click', function (e) {
+            e.stopPropagation();
+        });
+        dialog.addEventListener('mousedown', function (e) {
+            e.stopPropagation();
+        });
+        dialog.addEventListener('pointerdown', function (e) {
+            e.stopPropagation();
+        });
+
         dialog.querySelector('#sst-close-btn').addEventListener('click', closeDialog);
         dialog.querySelector('#sst-backdrop').addEventListener('click', closeDialog);
 
@@ -808,29 +821,42 @@
         return title.indexOf('subtitle') !== -1;
     }
 
+    function dismissBlockingOverlays() {
+        var nodes = document.querySelectorAll('.dialogContainer, .dialogBackdrop, .dialogBackdropOpened, .actionSheet');
+        for (var i = 0; i < nodes.length; i++) {
+            var el = nodes[i];
+            if (el.id === 'sst-dialog' || (el.closest && el.closest('#sst-dialog'))) {
+                continue;
+            }
+            el.style.setProperty('pointer-events', 'none', 'important');
+            el.classList.remove('dialogBackdropOpened');
+        }
+    }
+
+    function getOverlayParent() {
+        return document.fullscreenElement || document.webkitFullscreenElement || document.body;
+    }
+
     function closeActionSheet(sheet) {
         if (!sheet) {
+            dismissBlockingOverlays();
             return;
         }
 
         try {
-            var closeBtn = sheet.querySelector('.btnCloseActionSheet');
-            if (closeBtn) {
-                closeBtn.click();
-                return;
-            }
+            var dlg = sheet.classList.contains('dialog') ? sheet : (sheet.closest('.dialog') || sheet);
 
-            var backdrops = document.querySelectorAll('.dialogBackdrop, .dialogBackdropOpened');
-            for (var i = 0; i < backdrops.length; i++) {
-                backdrops[i].click();
-            }
-
-            if (sheet.isConnected) {
-                sheet.remove();
+            // Run Jellyfin's close path so .dialogContainer / backdrop / history are cleaned up.
+            if (dlg.classList && !dlg.classList.contains('hide')) {
+                dlg.dispatchEvent(new CustomEvent('closing', { bubbles: false, cancelable: false }));
+                dlg.classList.add('hide');
+                dlg.dispatchEvent(new CustomEvent('_close', { bubbles: false, cancelable: false }));
             }
         } catch (e) {
             console.debug(LOG_PREFIX, 'closeActionSheet failed', e);
         }
+
+        dismissBlockingOverlays();
     }
 
     function createFindSubtitlesMenuItem(sheet) {
@@ -877,8 +903,11 @@
         item.addEventListener('click', function (e) {
             e.preventDefault();
             e.stopPropagation();
-            closeActionSheet(item.closest('.actionSheet'));
-            setTimeout(showDialog, 100);
+            if (e.stopImmediatePropagation) {
+                e.stopImmediatePropagation();
+            }
+            closeActionSheet(item.closest('.actionSheet') || item.closest('.dialog'));
+            setTimeout(showDialog, 50);
         });
 
         return item;
