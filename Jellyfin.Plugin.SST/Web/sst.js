@@ -14,11 +14,11 @@
         return;
     }
 
-    var SST_VERSION = '1.2.2.0';
+    var SST_VERSION = '1.2.3.0';
     var PLUGIN_ID = 'b3a1c2d4-e5f6-4a89-9bcd-1234567890ab';
     var LOG_PREFIX = '[SST]';
     var FIND_SUBTITLES_ID = 'sst-find-subtitles';
-    var FIND_SUBTITLES_LABEL = 'Find subtitles';
+    var FIND_SUBTITLES_LABEL = '🪐 Find Subtitles';
     var INJECTED_ITEM_CLASS = 'sst-find-subtitles-item';
 
     var COMMON_LANGUAGES = [
@@ -598,7 +598,7 @@
             '<div class="sst-dialog-backdrop" id="sst-backdrop"></div>' +
             '<div class="sst-dialog-content">' +
             '  <div class="sst-dialog-header">' +
-            '    <h2 class="sst-dialog-title"><span class="sst-planet-icon">🪐</span> Find subtitles</h2>' +
+            '    <h2 class="sst-dialog-title">' + FIND_SUBTITLES_LABEL + '</h2>' +
             '    <button type="button" class="sst-close-btn" id="sst-close-btn" title="Close" aria-label="Close">✕</button>' +
             '  </div>' +
             '  <div class="sst-dialog-body">' +
