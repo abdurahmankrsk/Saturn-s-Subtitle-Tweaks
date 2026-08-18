@@ -692,6 +692,28 @@
     }
 }
 
+.sst-dialog-tv .sst-dialog-content {
+    max-width: min(92vw, 860px);
+    max-height: min(88vh, calc(100dvh - 24px));
+}
+
+.sst-dialog-tv .sst-btn,
+.sst-dialog-tv .sst-select,
+.sst-dialog-tv .sst-close-btn,
+.sst-dialog-tv .sst-btn-download {
+    min-height: 48px;
+}
+
+.sst-dialog-tv .sst-btn:focus,
+.sst-dialog-tv .sst-select:focus,
+.sst-dialog-tv .sst-close-btn:focus,
+.sst-dialog-tv .sst-btn-download:focus,
+html.layout-tv .actionSheetMenuItem.sst-find-subtitles-item:focus,
+html.layout-tv .actionSheetMenuItem.sst-offset-item:focus {
+    outline: 3px solid #00a4dc;
+    outline-offset: 2px;
+}
+
 .actionSheet.sst-cc-constrained {
     overflow: hidden;
 }
