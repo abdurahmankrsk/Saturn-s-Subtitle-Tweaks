@@ -1,6 +1,6 @@
 name: "Saturn's Subtitle Tweaks"
 guid: "b3a1c2d4-e5f6-4a89-9bcd-1234567890ab"
-version: 25
+version: 26
 targetAbi: "10.11.0.0"
 framework: "net9.0"
 owner: "community"
@@ -13,6 +13,6 @@ category: "Subtitles"
 artifacts:
   - "Jellyfin.Plugin.SST.dll"
 changelog: |-
-  ## v1.3.8
-  - Restore a usable CC menu size on PC and phone
+  ## v1.3.9
+  - Stop SST middleware from wrapping every request (that could crash the server)
 
