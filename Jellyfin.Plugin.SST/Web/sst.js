@@ -1,22 +1,18 @@
 /**
  * Saturn's Subtitle Tweaks (SST) — Jellyfin Web Client Module
  *
- * Phase 1: injection-only POC — "Find subtitles" in the CC/subtitle action sheet.
- *
- * Architecture (designed for future jellyfin-web native integration):
- *   SST.Core        — shared API/helpers (Phase 2+)
- *   SST.UI          — dialogs and presentation (callable without injection)
- *   SST.Integration — web-inject hooks (replaceable when patching jellyfin-web)
- *
- * SECURITY: No API keys, credentials, or provider secrets in this file.
+ * Phase 1: "Find subtitles" in the CC/subtitle action sheet.
  *
  * @license MIT
  */
 (function () {
     'use strict';
 
-    var SST_VERSION = '1.1.1.0';
-    var PLUGIN_ID = 'b3a1c2d4-e5f6-4a89-9bcd-1234567890ab';
+    if (window.SST && window.SST.loaded) {
+        return;
+    }
+
+    var SST_VERSION = '1.1.2.0';
     var LOG_PREFIX = '[SST]';
     var FIND_SUBTITLES_ID = 'sst-find-subtitles';
     var FIND_SUBTITLES_LABEL = 'Find subtitles';
@@ -25,31 +21,6 @@
     var isDialogOpen = false;
     var observer = null;
     var subtitleButtonListenerAttached = false;
-
-    function getApiClient() {
-        if (typeof ApiClient !== 'undefined') {
-            return ApiClient;
-        }
-        if (window.ApiClient) {
-            return window.ApiClient;
-        }
-        return null;
-    }
-
-    function loadPluginConfiguration() {
-        var api = getApiClient();
-        if (!api || typeof api.getPluginConfiguration !== 'function') {
-            return Promise.resolve({ EnableSSTUI: true });
-        }
-
-        return api.getPluginConfiguration(PLUGIN_ID).catch(function () {
-            return { EnableSSTUI: true };
-        });
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // BOOT — ensure stylesheet is present (fallback if index.html injection missed)
-    // ═══════════════════════════════════════════════════════════════
 
     function getServerRoot() {
         try {
@@ -72,13 +43,14 @@
         var link = document.createElement('link');
         link.id = 'sst-client-style';
         link.rel = 'stylesheet';
-        link.href = getServerRoot() + '/sst/ClientStyle';
+        var script = document.getElementById('sst-script');
+        if (script && script.src) {
+            link.href = script.src.replace(/sst\.js(\?.*)?$/, 'sst.css');
+        } else {
+            link.href = getServerRoot() + '/web/sst.css';
+        }
         document.head.appendChild(link);
     }
-
-  // ═══════════════════════════════════════════════════════════════
-    // SST.UI — presentation layer (future: import from jellyfin-web without injection)
-    // ═══════════════════════════════════════════════════════════════
 
     function showStubDialog() {
         if (isDialogOpen) {
@@ -104,7 +76,6 @@
             '</div>';
 
         document.body.appendChild(dialog);
-
         requestAnimationFrame(function () {
             dialog.classList.add('sst-dialog-open');
         });
@@ -137,20 +108,22 @@
         }, 250);
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // SST.Integration — Jellyfin 10.11.x action sheet hooks (injection-only)
-    // ═══════════════════════════════════════════════════════════════
-
-    /**
-     * A subtitle track action sheet always includes the "Off" option (stream Index -1).
-     * This is more reliable than matching translated titles or obsolete class names.
-     */
     function isSubtitleTrackActionSheet(sheet) {
         if (!sheet || !sheet.classList || !sheet.classList.contains('actionSheet')) {
             return false;
         }
 
-        return sheet.querySelector('.actionSheetMenuItem[data-id="-1"]') !== null;
+        if (sheet.querySelector('.actionSheetMenuItem[data-id="-1"]')) {
+            return true;
+        }
+
+        if (sheet.querySelector('.actionSheetMenuItem[data-id="secondarysubtitle"]')) {
+            return true;
+        }
+
+        var titleEl = sheet.querySelector('.actionSheetTitle');
+        var title = titleEl && titleEl.textContent ? titleEl.textContent.replace(/\s+/g, ' ').trim().toLowerCase() : '';
+        return title.indexOf('subtitle') !== -1;
     }
 
     function closeActionSheet(sheet) {
@@ -165,7 +138,7 @@
                 return;
             }
 
-            var backdrops = document.querySelectorAll('.dialogBackdrop');
+            var backdrops = document.querySelectorAll('.dialogBackdrop, .dialogBackdropOpened');
             for (var i = 0; i < backdrops.length; i++) {
                 backdrops[i].click();
             }
@@ -178,24 +151,51 @@
         }
     }
 
-    function createFindSubtitlesMenuItem() {
-        var item = document.createElement('button');
-        item.type = 'button';
-        item.className = 'listItem listItem-button actionSheetMenuItem ' + INJECTED_ITEM_CLASS;
-        item.setAttribute('data-id', FIND_SUBTITLES_ID);
-        item.setAttribute('is', 'emby-button');
+    function createFindSubtitlesMenuItem(sheet) {
+        var sample = sheet.querySelector('.actionSheetMenuItem');
+        var item;
 
-        var textWrap = document.createElement('div');
-        textWrap.className = 'listItemBody actionsheet-xlargeFont';
-        textWrap.textContent = FIND_SUBTITLES_LABEL;
-        item.appendChild(textWrap);
+        if (sample) {
+            item = sample.cloneNode(true);
+            item.classList.add(INJECTED_ITEM_CLASS);
+            item.setAttribute('data-id', FIND_SUBTITLES_ID);
+            item.removeAttribute('autofocus');
+            item.removeAttribute('autoFocus');
+
+            var textEl = item.querySelector('.listItemBodyText') || item.querySelector('.listItemBody');
+            if (textEl) {
+                textEl.textContent = FIND_SUBTITLES_LABEL;
+            } else {
+                item.textContent = FIND_SUBTITLES_LABEL;
+            }
+
+            var secondary = item.querySelector('.secondaryText, .listItemBody aside, .listItemAside');
+            if (secondary) {
+                secondary.textContent = '';
+            }
+
+            var selectedIcon = item.querySelector('.listItemIcon.check, .material-icons.check');
+            if (selectedIcon) {
+                selectedIcon.remove();
+            }
+        } else {
+            item = document.createElement('button');
+            item.type = 'button';
+            item.className = 'listItem listItem-button actionSheetMenuItem ' + INJECTED_ITEM_CLASS;
+            item.setAttribute('data-id', FIND_SUBTITLES_ID);
+            var body = document.createElement('div');
+            body.className = 'listItemBody';
+            var text = document.createElement('div');
+            text.className = 'listItemBodyText';
+            text.textContent = FIND_SUBTITLES_LABEL;
+            body.appendChild(text);
+            item.appendChild(body);
+        }
 
         item.addEventListener('click', function (e) {
             e.preventDefault();
             e.stopPropagation();
-
-            var sheet = item.closest('.actionSheet');
-            closeActionSheet(sheet);
+            closeActionSheet(item.closest('.actionSheet'));
             setTimeout(showStubDialog, 100);
         });
 
@@ -207,38 +207,32 @@
             return;
         }
 
-        if (sheet.querySelector('.' + INJECTED_ITEM_CLASS)) {
+        if (sheet.querySelector('.' + INJECTED_ITEM_CLASS) ||
+            sheet.querySelector('[data-id="' + FIND_SUBTITLES_ID + '"]')) {
             return;
         }
 
-        var scroller = sheet.querySelector('.actionSheetScroller');
-        if (!scroller) {
-            return;
-        }
-
-        var divider = document.createElement('div');
-        divider.className = 'sst-action-sheet-divider';
-        divider.setAttribute('aria-hidden', 'true');
-
-        scroller.appendChild(divider);
-        scroller.appendChild(createFindSubtitlesMenuItem());
-
+        var scroller = sheet.querySelector('.actionSheetScroller') || sheet;
+        scroller.appendChild(createFindSubtitlesMenuItem(sheet));
         console.info(LOG_PREFIX, 'Injected "' + FIND_SUBTITLES_LABEL + '" into subtitle action sheet');
     }
 
     function scanForSubtitleActionSheets(root) {
-        var scope = root || document;
-        var sheets;
-
         try {
-            if (scope.classList && scope.classList.contains('actionSheet')) {
-                injectFindSubtitlesIntoSheet(scope);
+            var scope = root || document;
+            if (scope.nodeType !== Node.ELEMENT_NODE && scope !== document) {
                 return;
             }
 
-            sheets = scope.querySelectorAll('.actionSheet');
-            for (var i = 0; i < sheets.length; i++) {
-                injectFindSubtitlesIntoSheet(sheets[i]);
+            if (scope.classList && scope.classList.contains('actionSheet')) {
+                injectFindSubtitlesIntoSheet(scope);
+            }
+
+            if (scope.querySelectorAll) {
+                var sheets = scope.querySelectorAll('.actionSheet');
+                for (var i = 0; i < sheets.length; i++) {
+                    injectFindSubtitlesIntoSheet(sheets[i]);
+                }
             }
         } catch (e) {
             console.debug(LOG_PREFIX, 'scanForSubtitleActionSheets failed', e);
@@ -246,11 +240,10 @@
     }
 
     function onSubtitleButtonClick() {
-        // Action sheet is rendered asynchronously after the CC button handler runs.
-        requestAnimationFrame(function () {
+        [0, 30, 80, 160, 300, 600, 1000].forEach(function (delay) {
             setTimeout(function () {
                 scanForSubtitleActionSheets(document);
-            }, 0);
+            }, delay);
         });
     }
 
@@ -287,21 +280,21 @@
                 var added = mutations[i].addedNodes;
                 for (var j = 0; j < added.length; j++) {
                     var node = added[j];
-                    if (node.nodeType !== Node.ELEMENT_NODE) {
-                        continue;
+                    if (node.nodeType === Node.ELEMENT_NODE) {
+                        scanForSubtitleActionSheets(node);
                     }
-                    scanForSubtitleActionSheets(node);
                 }
             }
         });
 
         observer.observe(document.body, { childList: true, subtree: true });
+        scanForSubtitleActionSheets(document);
     }
 
     function initWebInject() {
         attachSubtitleButtonListener();
         startActionSheetObserver();
-        console.info(LOG_PREFIX, 'Web injection active (v' + SST_VERSION + ')');
+        console.info(LOG_PREFIX, 'Web injection active (v' + SST_VERSION + '). Type SST in the console to verify.');
     }
 
     function destroyWebInject() {
@@ -312,45 +305,18 @@
         subtitleButtonListenerAttached = false;
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // SST.Core — placeholder for Phase 2+ (API helpers, playback context)
-    // ═══════════════════════════════════════════════════════════════
-
-    var Core = {
-        getServerRoot: getServerRoot
-    };
-
-    // ═══════════════════════════════════════════════════════════════
-    // Global export — jellyfin-web native integration can call SST.UI directly
-    // ═══════════════════════════════════════════════════════════════
-
     window.SST = {
         version: SST_VERSION,
         loaded: true,
         integration: 'web-inject',
-        Core: Core,
-        UI: {
-            show: showStubDialog,
-            close: closeStubDialog
-        },
-        Integration: {
-            init: initWebInject,
-            destroy: destroyWebInject
-        }
+        Core: { getServerRoot: getServerRoot },
+        UI: { show: showStubDialog, close: closeStubDialog },
+        Integration: { init: initWebInject, destroy: destroyWebInject }
     };
 
     function init() {
         ensureStylesheet();
-
-        loadPluginConfiguration().then(function (config) {
-            if (config && config.EnableSSTUI === false) {
-                console.info(LOG_PREFIX, 'SST UI disabled in plugin configuration');
-                return;
-            }
-            initWebInject();
-        }).catch(function () {
-            initWebInject();
-        });
+        initWebInject();
     }
 
     if (document.readyState === 'loading') {
