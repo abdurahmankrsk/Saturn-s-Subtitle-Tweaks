@@ -14,7 +14,7 @@
         return;
     }
 
-    var SST_VERSION = '1.3.4.0';
+    var SST_VERSION = '1.3.5.0';
     var PLUGIN_ID = 'b3a1c2d4-e5f6-4a89-9bcd-1234567890ab';
     var LOG_PREFIX = '[SST]';
     var FIND_SUBTITLES_ID = 'sst-find-subtitles';
@@ -82,6 +82,40 @@
             console.debug(LOG_PREFIX, 'getServerRoot failed', e);
         }
         return '';
+    }
+
+    function isTvLayout() {
+        try {
+            if (window.layoutManager && window.layoutManager.tv) {
+                return true;
+            }
+        } catch (e) {
+            console.debug(LOG_PREFIX, 'layoutManager check failed', e);
+        }
+        var html = document.documentElement;
+        if (html && html.classList && html.classList.contains('layout-tv')) {
+            return true;
+        }
+        return !!(document.body && document.body.classList && document.body.classList.contains('layout-tv'));
+    }
+
+    function isActivateKey(e) {
+        var key = e.key || '';
+        var code = e.keyCode || e.which || 0;
+        return key === 'Enter' || key === ' ' || key === 'Spacebar' ||
+            code === 13 || code === 32 || code === 23;
+    }
+
+    function isBackKey(e) {
+        var key = e.key || '';
+        var code = e.keyCode || e.which || 0;
+        if (key === 'Escape' || code === 27) {
+            return true;
+        }
+        if (!isTvLayout()) {
+            return false;
+        }
+        return key === 'Backspace' || code === 8 || code === 461 || code === 166 || code === 4;
     }
 
     function ensureStylesheet() {
@@ -1278,10 +1312,19 @@
 
         dismissBlockingOverlays();
         getOverlayParent().appendChild(dialog);
+        if (isTvLayout()) {
+            dialog.classList.add('sst-dialog-tv');
+        }
         dialog.classList.add('sst-dialog-open');
         requestAnimationFrame(function () {
             dismissBlockingOverlays();
             dialog.classList.add('sst-dialog-open');
+            var focusTarget = dialog.querySelector('#sst-search-btn') ||
+                dialog.querySelector('.sst-btn-offset') ||
+                dialog.querySelector('#sst-close-btn');
+            if (focusTarget && typeof focusTarget.focus === 'function') {
+                focusTarget.focus();
+            }
         });
 
         bindDialogChrome(dialog);
@@ -1338,12 +1381,13 @@
         });
 
         var keyHandler = function (e) {
-            if (e.key === 'Escape') {
+            if (isBackKey(e)) {
+                e.preventDefault();
                 closeDialog();
-                document.removeEventListener('keydown', keyHandler);
+                document.removeEventListener('keydown', keyHandler, true);
             }
         };
-        document.addEventListener('keydown', keyHandler);
+        document.addEventListener('keydown', keyHandler, true);
     }
 
     function bindFindDialogEvents(dialog, playing, languageOptions) {
@@ -1638,7 +1682,17 @@
             item.appendChild(body);
         }
 
-        item.addEventListener('click', function (e) {
+        item.setAttribute('tabindex', '0');
+        item.addEventListener('click', onActivate);
+        item.addEventListener('keydown', function (e) {
+            if (isActivateKey(e)) {
+                onActivate(e);
+            }
+        });
+
+        return item;
+
+        function onActivate(e) {
             e.preventDefault();
             e.stopPropagation();
             if (e.stopImmediatePropagation) {
@@ -1646,9 +1700,7 @@
             }
             closeActionSheet(item.closest('.actionSheet') || item.closest('.dialog'));
             setTimeout(onOpen, 50);
-        });
-
-        return item;
+        }
     }
 
     function bindNativeTrackClicks(sheet) {
@@ -1656,7 +1708,7 @@
             return;
         }
         sheet.setAttribute('data-sst-native-bound', '1');
-        sheet.addEventListener('click', function (e) {
+        var onNativeTrack = function (e) {
             var target = e.target;
             if (!target || !target.closest) {
                 return;
@@ -1670,6 +1722,12 @@
                 return;
             }
             releaseSstPlaybackControl();
+        };
+        sheet.addEventListener('click', onNativeTrack, true);
+        sheet.addEventListener('keydown', function (e) {
+            if (isActivateKey(e)) {
+                onNativeTrack(e);
+            }
         }, true);
     }
 
@@ -1699,7 +1757,9 @@
             sheet.querySelector('[data-id="' + OFFSET_ID + '"]');
 
         if (findItem && offsetItem) {
-            scheduleConstrainActionSheet(sheet);
+            if (!isTvLayout()) {
+                scheduleConstrainActionSheet(sheet);
+            }
             return;
         }
 
@@ -1734,7 +1794,9 @@
         if (injected) {
             console.info(LOG_PREFIX, 'Injected SST items at top of subtitle action sheet');
         }
-        scheduleConstrainActionSheet(sheet);
+        if (!isTvLayout()) {
+            scheduleConstrainActionSheet(sheet);
+        }
     }
 
     function scheduleConstrainActionSheet(sheet) {
@@ -1746,7 +1808,7 @@
     }
 
     function constrainActionSheetScroller(sheet) {
-        if (!sheet || !sheet.isConnected) {
+        if (!sheet || !sheet.isConnected || isTvLayout()) {
             return;
         }
 
@@ -1820,7 +1882,8 @@
     }
 
     function onSubtitleButtonClick() {
-        [0, 40, 120].forEach(function (delay) {
+        var delays = isTvLayout() ? [0, 40, 120, 300, 800] : [0, 40, 120];
+        delays.forEach(function (delay) {
             setTimeout(function () {
                 scanForSubtitleActionSheets(document);
             }, delay);
@@ -1832,18 +1895,28 @@
             return;
         }
 
+        function maybeFromSubtitleButton(target) {
+            return target && target.closest && target.closest('.btnSubtitles');
+        }
+
         document.addEventListener('click', function (e) {
             try {
-                var target = e.target;
-                if (!target || !target.closest) {
-                    return;
-                }
-
-                if (target.closest('.btnSubtitles')) {
+                if (maybeFromSubtitleButton(e.target)) {
                     onSubtitleButtonClick();
                 }
             } catch (err) {
                 console.debug(LOG_PREFIX, 'subtitle button listener error', err);
+            }
+        }, true);
+
+        document.addEventListener('keydown', function (e) {
+            try {
+                if ((isActivateKey(e) && maybeFromSubtitleButton(document.activeElement)) ||
+                    (isActivateKey(e) && maybeFromSubtitleButton(e.target))) {
+                    onSubtitleButtonClick();
+                }
+            } catch (err) {
+                console.debug(LOG_PREFIX, 'subtitle button key listener error', err);
             }
         }, true);
 
