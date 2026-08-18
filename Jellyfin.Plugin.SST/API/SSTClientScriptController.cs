@@ -1,42 +1,36 @@
-using System.IO;
-using System.Net.Mime;
 using System.Reflection;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Net.Http.Headers;
 
 namespace Jellyfin.Plugin.SST.API;
 
 /// <summary>
-/// API controller for serving SST client-side assets.
-/// These endpoints serve the JavaScript and CSS files that provide
-/// the in-player subtitle search UI.
+/// Serves SST client-side JavaScript and CSS. These endpoints contain no secrets.
 /// </summary>
 [ApiController]
+[Route("sst")]
 [AllowAnonymous]
 public class SSTClientScriptController : ControllerBase
 {
     /// <summary>
-    /// Serves the main SST JavaScript module.
-    /// This endpoint is referenced by a script tag injected into the web client.
+    /// Serves the SST JavaScript module.
     /// </summary>
     /// <returns>The SST JavaScript file.</returns>
-    [HttpGet("sst/ClientScript")]
+    [HttpGet("ClientScript")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public ActionResult GetClientScript()
     {
-        var assembly = Assembly.GetExecutingAssembly();
-        var resourceName = "Jellyfin.Plugin.SST.Web.sst.js";
-        var stream = assembly.GetManifestResourceStream(resourceName);
+        var stream = Assembly.GetExecutingAssembly()
+            .GetManifestResourceStream("Jellyfin.Plugin.SST.Web.sst.js");
 
         if (stream is null)
         {
             return NotFound();
         }
 
-        Response.Headers[HeaderNames.CacheControl] = "no-cache, no-store, must-revalidate";
+        Response.Headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
         return File(stream, "application/javascript");
     }
 
@@ -44,21 +38,20 @@ public class SSTClientScriptController : ControllerBase
     /// Serves the SST CSS stylesheet.
     /// </summary>
     /// <returns>The SST CSS file.</returns>
-    [HttpGet("sst/ClientStyle")]
+    [HttpGet("ClientStyle")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public ActionResult GetClientStyle()
     {
-        var assembly = Assembly.GetExecutingAssembly();
-        var resourceName = "Jellyfin.Plugin.SST.Web.sst.css";
-        var stream = assembly.GetManifestResourceStream(resourceName);
+        var stream = Assembly.GetExecutingAssembly()
+            .GetManifestResourceStream("Jellyfin.Plugin.SST.Web.sst.css");
 
         if (stream is null)
         {
             return NotFound();
         }
 
-        Response.Headers[HeaderNames.CacheControl] = "no-cache, no-store, must-revalidate";
+        Response.Headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
         return File(stream, "text/css");
     }
 }
