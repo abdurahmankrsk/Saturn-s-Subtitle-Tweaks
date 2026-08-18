@@ -1,12 +1,7 @@
-name: Build and package SST plugin
+name: Build SST plugin
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
-
-permissions:
-  contents: write
 
 jobs:
   build:
@@ -23,16 +18,11 @@ jobs:
 
       - name: Package zip
         run: |
-          cd Jellyfin.Plugin.SST/bin/Release/net9.0
-          zip -j ../../../../../Jellyfin.Plugin.SST.zip Jellyfin.Plugin.SST.dll
+          mkdir -p dist
+          zip -j dist/Jellyfin.Plugin.SST.zip Jellyfin.Plugin.SST/bin/Release/net9.0/Jellyfin.Plugin.SST.dll
 
-      - name: Update manifest checksum
-        run: python scripts/update-manifest.py
-
-      - name: Commit release artifacts
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Jellyfin.Plugin.SST.zip manifest.json
-          git diff --staged --quiet || git commit -m "chore: package plugin v$(grep -oP '(?<=<Version>)[^<]+' Directory.Build.props | head -1)"
-          git push
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Jellyfin.Plugin.SST
+          path: dist/Jellyfin.Plugin.SST.zip
