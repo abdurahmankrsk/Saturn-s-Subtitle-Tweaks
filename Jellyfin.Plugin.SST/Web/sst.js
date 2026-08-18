@@ -14,7 +14,7 @@
         return;
     }
 
-    var SST_VERSION = '1.3.3.0';
+    var SST_VERSION = '1.3.4.0';
     var PLUGIN_ID = 'b3a1c2d4-e5f6-4a89-9bcd-1234567890ab';
     var LOG_PREFIX = '[SST]';
     var FIND_SUBTITLES_ID = 'sst-find-subtitles';
@@ -68,6 +68,8 @@
     var lastItemId = null;
     var cueBaseTimes = typeof WeakMap === 'function' ? new WeakMap() : null;
     var escapeDiv = document.createElement('div');
+    var DOWNLOAD_STORE_KEY = 'sst-downloaded-subtitles';
+    var inFlightDownloads = {};
 
     function getServerRoot() {
         try {
@@ -431,6 +433,148 @@
         var needle = String(releaseName).toLowerCase().replace(/\s+/g, '.');
         var shortNeedle = needle.split('.hdtv')[0].split('.web')[0].split('.bluray')[0];
         return label.indexOf(needle) !== -1 || (shortNeedle.length > 10 && label.indexOf(shortNeedle) !== -1);
+    }
+
+    function normalizeReleaseKey(value) {
+        return String(value || '').toLowerCase().replace(/[\s._-]+/g, '.').replace(/^\.+|\.+$/g, '');
+    }
+
+    function isSameRelease(left, right) {
+        var a = normalizeReleaseKey(left);
+        var b = normalizeReleaseKey(right);
+        if (!a || !b || a.length < 8 || b.length < 8) {
+            return false;
+        }
+        return !!(a && b && a.length >= 8 && a === b);
+    }
+
+    function loadDownloadedMap() {
+        try {
+            var raw = window.localStorage && window.localStorage.getItem(DOWNLOAD_STORE_KEY);
+            var parsed = raw ? JSON.parse(raw) : {};
+            return parsed && typeof parsed === 'object' ? parsed : {};
+        } catch (e) {
+            return {};
+        }
+    }
+
+    function saveDownloadedMap(map) {
+        try {
+            if (window.localStorage) {
+                window.localStorage.setItem(DOWNLOAD_STORE_KEY, JSON.stringify(map));
+            }
+        } catch (e) {
+            console.debug(LOG_PREFIX, 'could not persist downloaded subtitle ids', e);
+        }
+    }
+
+    function forgetDownloadedSubtitle(itemId, subtitleId) {
+        if (!itemId || !subtitleId) {
+            return;
+        }
+        var map = loadDownloadedMap();
+        if (!map[itemId] || !map[itemId][subtitleId]) {
+            return;
+        }
+        delete map[itemId][subtitleId];
+        if (!Object.keys(map[itemId]).length) {
+            delete map[itemId];
+        }
+        saveDownloadedMap(map);
+    }
+
+    function markSubtitleDownloaded(itemId, subtitleId, releaseName, language) {
+        if (!itemId || !subtitleId) {
+            return;
+        }
+        var map = loadDownloadedMap();
+        if (!map[itemId]) {
+            map[itemId] = {};
+        }
+        map[itemId][subtitleId] = {
+            name: releaseName || '',
+            lang: normalizeLang(language),
+            at: Date.now()
+        };
+        saveDownloadedMap(map);
+    }
+
+    function hasExternalForLanguage(streams, language) {
+        var pref = normalizeLang(language);
+        var list = streams || [];
+        for (var i = 0; i < list.length; i++) {
+            var stream = list[i];
+            if (!stream.IsExternal) {
+                continue;
+            }
+            if (isConflictingLanguage(stream, pref)) {
+                continue;
+            }
+            if (!pref || isPreferredLanguage(stream, pref) || !streamLang(stream)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function isRemoteSubtitleAlreadyOwned(itemId, subtitleId, releaseName, language, streams) {
+        var records = {};
+        if (itemId) {
+            var map = loadDownloadedMap();
+            records = map[itemId] || {};
+        }
+        if (subtitleId && records[subtitleId]) {
+            if (hasExternalForLanguage(streams, records[subtitleId].lang || language)) {
+                return true;
+            }
+            forgetDownloadedSubtitle(itemId, subtitleId);
+        }
+        var keys = Object.keys(records);
+        for (var i = 0; i < keys.length; i++) {
+            if (isSameRelease(records[keys[i]] && records[keys[i]].name, releaseName)) {
+                if (hasExternalForLanguage(streams, (records[keys[i]] && records[keys[i]].lang) || language)) {
+                    return true;
+                }
+            }
+        }
+        var list = streams || [];
+        for (var j = 0; j < list.length; j++) {
+            if (matchesReleaseName(list[j], releaseName)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function markResultRowDownloaded(button) {
+        if (!button) {
+            return;
+        }
+        button.disabled = true;
+        button.innerHTML = '✓';
+        button.title = 'Already downloaded';
+        button.classList.add('sst-btn-already');
+        var row = button.closest ? button.closest('.sst-result') : null;
+        if (row) {
+            row.classList.add('sst-result-downloaded');
+            var badges = row.querySelector('.sst-result-badges');
+            if (!badges) {
+                badges = document.createElement('div');
+                badges.className = 'sst-result-badges';
+                var header = row.querySelector('.sst-result-header');
+                if (header && header.parentNode) {
+                    header.parentNode.insertBefore(badges, header.nextSibling);
+                } else {
+                    row.appendChild(badges);
+                }
+            }
+            if (!row.querySelector('.sst-badge-owned')) {
+                var badge = document.createElement('span');
+                badge.className = 'sst-badge sst-badge-owned';
+                badge.textContent = 'In library';
+                badges.insertBefore(badge, badges.firstChild);
+            }
+        }
     }
 
     function vttConflictsWithLanguage(vttText, preferred) {
@@ -977,8 +1121,11 @@
         return code;
     }
 
-    function formatSubtitleResult(sub, index) {
+    function formatSubtitleResult(sub, index, alreadyOwned) {
         var badges = [];
+        if (alreadyOwned) {
+            badges.push('<span class="sst-badge sst-badge-owned">In library</span>');
+        }
         if (sub.IsHashMatch) {
             badges.push('<span class="sst-badge sst-badge-hash">Hash Match</span>');
         }
@@ -1016,13 +1163,18 @@
         }
 
         var releaseName = sub.Name || sub.Comment || ('Subtitle ' + (index + 1));
+        var rowClass = 'sst-result' + (alreadyOwned ? ' sst-result-downloaded' : '');
+        var btnClass = 'sst-btn sst-btn-download' + (alreadyOwned ? ' sst-btn-already' : '');
+        var btnLabel = alreadyOwned ? '✓' : '⬇';
+        var btnTitle = alreadyOwned ? 'Already downloaded' : 'Download';
+        var disabledAttr = alreadyOwned ? ' disabled' : '';
 
-        return '<div class="sst-result" data-subtitle-id="' + escapeHtml(sub.Id) + '">' +
+        return '<div class="' + rowClass + '" data-subtitle-id="' + escapeHtml(sub.Id) + '">' +
             '  <div class="sst-result-header">' +
             '    <div class="sst-result-index">' + (index + 1) + '</div>' +
             '    <div class="sst-result-title">' + escapeHtml(releaseName) + '</div>' +
-            '    <button type="button" class="sst-btn sst-btn-download" data-subtitle-id="' + escapeHtml(sub.Id) +
-            '" data-name="' + escapeHtml(releaseName) + '" title="Download">⬇</button>' +
+            '    <button type="button" class="' + btnClass + '" data-subtitle-id="' + escapeHtml(sub.Id) +
+            '" data-name="' + escapeHtml(releaseName) + '" title="' + btnTitle + '"' + disabledAttr + '>' + btnLabel + '</button>' +
             '  </div>' +
             (badges.length ? '  <div class="sst-result-badges">' + badges.join('') + '</div>' : '') +
             (metaItems.length ? '  <div class="sst-result-meta">' + metaItems.join('') + '</div>' : '') +
@@ -1265,14 +1417,34 @@
             statusEl.className = 'sst-status sst-status-success';
             statusEl.style.display = 'block';
 
+            var existingStreams = [];
+            try {
+                existingStreams = ((await getItemSubtitleStreams(playing.itemId)).streams) || [];
+            } catch (e) {
+                existingStreams = [];
+            }
+
             var html = '';
             for (var i = 0; i < results.length; i++) {
-                html += formatSubtitleResult(results[i], i);
+                html += formatSubtitleResult(
+                    results[i],
+                    i,
+                    isRemoteSubtitleAlreadyOwned(
+                        playing.itemId,
+                        results[i].Id,
+                        results[i].Name || results[i].Comment || '',
+                        language,
+                        existingStreams
+                    )
+                );
             }
             resultsEl.innerHTML = html;
 
             var downloadBtns = resultsEl.querySelectorAll('.sst-btn-download');
             for (var j = 0; j < downloadBtns.length; j++) {
+                if (downloadBtns[j].disabled) {
+                    continue;
+                }
                 downloadBtns[j].addEventListener('click', function (e) {
                     e.stopPropagation();
                     performDownload(
@@ -1296,30 +1468,49 @@
 
     async function performDownload(playing, subtitleId, button, dialog, preferredLanguage, releaseName) {
         var originalHtml = button.innerHTML;
+        var statusEl = dialog.querySelector('#sst-status');
+        var language = normalizeLang(preferredLanguage || (dialog.querySelector('#sst-language') && dialog.querySelector('#sst-language').value) || 'eng');
+        var flightKey = playing.itemId + '|' + subtitleId;
+
+        if (button.disabled || inFlightDownloads[flightKey]) {
+            return;
+        }
+
+        inFlightDownloads[flightKey] = true;
         button.disabled = true;
         button.innerHTML = '…';
-        var statusEl = dialog.querySelector('#sst-status');
 
         try {
-            var previousIndexes = [];
-            var existingSignatures = {};
-            var language = normalizeLang(preferredLanguage || (dialog.querySelector('#sst-language') && dialog.querySelector('#sst-language').value) || 'eng');
+            var existingStreams = [];
             try {
-                var before = await getItemSubtitleStreams(playing.itemId);
-                previousIndexes = (before.streams || []).map(function (s) {
-                    return s.Index;
-                });
+                existingStreams = ((await getItemSubtitleStreams(playing.itemId)).streams) || [];
+            } catch (e) {
+                existingStreams = [];
+            }
+
+            if (isRemoteSubtitleAlreadyOwned(playing.itemId, subtitleId, releaseName, language, existingStreams)) {
+                markResultRowDownloaded(button);
+                statusEl.innerHTML = 'This subtitle is already in the library. It will not be downloaded again.';
+                statusEl.className = 'sst-status sst-status-success';
+                statusEl.style.display = 'block';
+                return;
+            }
+            var previousIndexes = existingStreams.map(function (s) {
+                return s.Index;
+            });
+            var existingSignatures = {};
+            try {
                 existingSignatures = await snapshotExistingVtts(
                     playing.itemId,
-                    before.mediaSourceId || playing.mediaSourceId,
-                    before.streams || []
+                    playing.mediaSourceId,
+                    existingStreams
                 );
             } catch (e) {
-                previousIndexes = [];
                 existingSignatures = {};
             }
             await downloadSubtitle(playing.itemId, subtitleId);
-            button.innerHTML = '✓';
+            markSubtitleDownloaded(playing.itemId, subtitleId, releaseName, language);
+            markResultRowDownloaded(button);
             statusEl.innerHTML = 'Downloaded. Applying to this playback…';
             statusEl.className = 'sst-status sst-status-success';
             statusEl.style.display = 'block';
@@ -1341,9 +1532,12 @@
         } catch (error) {
             button.disabled = false;
             button.innerHTML = originalHtml;
+            button.classList.remove('sst-btn-already');
             statusEl.innerHTML = escapeHtml(getErrorMessage(error));
             statusEl.className = 'sst-status sst-status-error';
             statusEl.style.display = 'block';
+        } finally {
+            delete inFlightDownloads[flightKey];
         }
     }
 
