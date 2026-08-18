@@ -2,6 +2,14 @@
 
 All notable changes to Saturn's Subtitle Tweaks (SST) will be documented in this file.
 
+## [1.3.2] - 2026-08-18
+
+### Fixed
+- Downloaded subtitles turn off every other track, then show only the new file
+- Selecting Off / English / Croatian in the CC menu stops the SST overlay so native tracks work again
+- CC subtitle sheet stays attached to the player instead of floating after SST injects its rows
+- Applying a download no longer waits on a library refresh (that added ~2s)
+
 ## [1.3.1] - 2026-08-18
 
 ### Fixed
