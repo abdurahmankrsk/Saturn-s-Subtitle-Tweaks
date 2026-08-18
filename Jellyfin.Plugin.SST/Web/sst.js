@@ -14,7 +14,7 @@
         return;
     }
 
-    var SST_VERSION = '1.3.5.0';
+    var SST_VERSION = '1.3.6.0';
     var PLUGIN_ID = 'b3a1c2d4-e5f6-4a89-9bcd-1234567890ab';
     var LOG_PREFIX = '[SST]';
     var FIND_SUBTITLES_ID = 'sst-find-subtitles';
@@ -23,6 +23,7 @@
     var OFFSET_LABEL = '🪐 Subtitle Offset';
     var INJECTED_ITEM_CLASS = 'sst-find-subtitles-item';
     var OFFSET_ITEM_CLASS = 'sst-offset-item';
+    var subtitleSheetExpectUntil = 0;
 
     var COMMON_LANGUAGES = [
         { code: 'eng', name: 'English' },
@@ -1598,9 +1599,13 @@
             return true;
         }
 
+        if (Date.now() < subtitleSheetExpectUntil) {
+            return true;
+        }
+
         var titleEl = sheet.querySelector('.actionSheetTitle');
         var title = titleEl && titleEl.textContent ? titleEl.textContent.replace(/\s+/g, ' ').trim().toLowerCase() : '';
-        return title.indexOf('subtitle') !== -1;
+        return /subtitle|podnaslov|titlov|sous-titr|untertitel|sottotitol|napisy|felirat|undertext|ondertitel/.test(title);
     }
 
     function dismissBlockingOverlays() {
@@ -1757,9 +1762,7 @@
             sheet.querySelector('[data-id="' + OFFSET_ID + '"]');
 
         if (findItem && offsetItem) {
-            if (!isTvLayout()) {
-                scheduleConstrainActionSheet(sheet);
-            }
+            scheduleConstrainActionSheet(sheet);
             return;
         }
 
@@ -1794,67 +1797,81 @@
         if (injected) {
             console.info(LOG_PREFIX, 'Injected SST items at top of subtitle action sheet');
         }
-        if (!isTvLayout()) {
-            scheduleConstrainActionSheet(sheet);
-        }
+        scheduleConstrainActionSheet(sheet);
     }
 
     function scheduleConstrainActionSheet(sheet) {
-        [0, 50, 150, 400].forEach(function (delay) {
+        [0, 16, 50, 120, 250, 500, 900].forEach(function (delay) {
             setTimeout(function () {
                 constrainActionSheetScroller(sheet);
             }, delay);
         });
     }
 
+    function getOsdBottomLimit() {
+        var viewportH = (window.visualViewport && window.visualViewport.height) || window.innerHeight || 0;
+        var limit = viewportH - 8;
+        var osd = document.querySelector('.videoOsdBottom');
+        if (!osd || osd.classList.contains('hide')) {
+            return limit;
+        }
+        var osdRect = osd.getBoundingClientRect();
+        if (osdRect.top > 40 && osdRect.top < viewportH - 24 && osdRect.height > 16) {
+            return osdRect.top - 8;
+        }
+        return limit;
+    }
+
+    function isPopoverActionSheet(sheet) {
+        var rect = sheet.getBoundingClientRect();
+        var vw = window.innerWidth || 0;
+        return vw > 0 && rect.width > 0 && rect.width < vw * 0.72;
+    }
+
     function constrainActionSheetScroller(sheet) {
-        if (!sheet || !sheet.isConnected || isTvLayout()) {
+        if (!sheet || !sheet.isConnected || !isPopoverActionSheet(sheet)) {
             return;
         }
 
         sheet.classList.add('sst-cc-constrained');
         sheet.style.removeProperty('transform');
 
-        var scroller = sheet.querySelector('.actionSheetScroller');
         var sheetRect = sheet.getBoundingClientRect();
         var viewportH = (window.visualViewport && window.visualViewport.height) || window.innerHeight || 0;
-        var bottomLimit = viewportH - 8;
-        var osd = document.querySelector('.videoOsdBottom');
-        if (osd) {
-            var osdTop = osd.getBoundingClientRect().top;
-            if (osdTop > 80 && osdTop < bottomLimit) {
-                bottomLimit = osdTop - 8;
-            }
+        var bottomLimit = getOsdBottomLimit();
+        var maxH = Math.min(
+            sheetRect.height || sheet.offsetHeight || 240,
+            Math.max(140, bottomLimit - 16),
+            Math.floor(viewportH * 0.7)
+        );
+        if (maxH < 140) {
+            maxH = Math.min(sheet.offsetHeight || 240, Math.floor(viewportH * 0.55));
         }
 
-        var available = Math.floor(bottomLimit - sheetRect.top);
-        if (available < 160) {
-            var height = Math.min(
-                Math.max(sheet.offsetHeight, 200),
-                Math.floor(viewportH * 0.6),
-                Math.max(160, bottomLimit - 16)
-            );
-            var shift = Math.round((bottomLimit - height) - sheetRect.top);
-            if (shift < 0) {
-                sheet.style.transform = 'translateY(' + shift + 'px)';
-            }
-            available = height;
+        var desiredTop = bottomLimit - maxH;
+        if (desiredTop < 8) {
+            desiredTop = 8;
+            maxH = Math.max(140, bottomLimit - desiredTop);
         }
 
-        if (available >= 120) {
-            sheet.style.maxHeight = available + 'px';
-            sheet.style.overflow = 'hidden';
+        var shift = Math.round(desiredTop - sheetRect.top);
+        if (shift !== 0) {
+            sheet.style.transform = 'translateY(' + shift + 'px)';
         }
+        sheet.style.setProperty('max-height', Math.floor(maxH) + 'px', 'important');
+        sheet.style.overflow = 'hidden';
 
+        var scroller = sheet.querySelector('.actionSheetScroller');
         if (!scroller) {
             return;
         }
 
         var title = sheet.querySelector('.actionSheetTitle');
-        var topUsed = title ? Math.max(0, title.getBoundingClientRect().bottom - sheet.getBoundingClientRect().top) : 0;
-        var max = Math.floor(available - topUsed - 8);
-        if (max >= 96) {
-            scroller.style.maxHeight = max + 'px';
+        var placed = sheet.getBoundingClientRect();
+        var topUsed = title ? Math.max(0, title.getBoundingClientRect().bottom - placed.top) : 0;
+        var scrollMax = Math.floor(maxH - topUsed - 8);
+        if (scrollMax >= 80) {
+            scroller.style.setProperty('max-height', scrollMax + 'px', 'important');
             scroller.style.overflowY = 'auto';
         }
     }
@@ -1882,12 +1899,72 @@
     }
 
     function onSubtitleButtonClick() {
-        var delays = isTvLayout() ? [0, 40, 120, 300, 800] : [0, 40, 120];
+        subtitleSheetExpectUntil = Date.now() + 2500;
+        var delays = [0, 40, 120, 300, 800];
         delays.forEach(function (delay) {
             setTimeout(function () {
                 scanForSubtitleActionSheets(document);
             }, delay);
         });
+    }
+
+    function createOsdButton(className, title, glyph, onClick) {
+        var sample = document.querySelector('.videoOsdBottom .btnSubtitles, .videoOsdBottom .paper-icon-button-light');
+        var btn;
+        if (sample) {
+            btn = sample.cloneNode(true);
+            btn.className = String(sample.className || '')
+                .replace(/\bbtnSubtitles\b/g, '')
+                .replace(/\bbtnAudio\b/g, '')
+                .replace(/\bhide\b/g, '')
+                .replace(/\bsst-osd-find\b/g, '')
+                .replace(/\bsst-osd-offset\b/g, '')
+                .replace(/\s+/g, ' ')
+                .trim() + ' ' + className;
+            btn.classList.remove('hide');
+            btn.removeAttribute('disabled');
+            btn.removeAttribute('autofocus');
+            btn.type = 'button';
+        } else {
+            btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'paper-icon-button-light ' + className;
+        }
+        btn.setAttribute('title', title);
+        btn.setAttribute('aria-label', title);
+        btn.innerHTML = '<span class="sst-osd-glyph" aria-hidden="true">' + glyph + '</span>';
+        btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            onClick();
+        });
+        btn.addEventListener('keydown', function (e) {
+            if (isActivateKey(e)) {
+                e.preventDefault();
+                e.stopPropagation();
+                onClick();
+            }
+        });
+        return btn;
+    }
+
+    function injectOsdButtons() {
+        var osd = document.querySelector('.videoOsdBottom');
+        if (!osd || osd.querySelector('.sst-osd-find')) {
+            return;
+        }
+        var subBtn = osd.querySelector('.btnSubtitles');
+        var parent = (subBtn && subBtn.parentNode) || osd.querySelector('.buttons') || osd;
+        var findBtn = createOsdButton('sst-osd-find', FIND_SUBTITLES_LABEL, '🪐', showFindDialog);
+        var offsetBtn = createOsdButton('sst-osd-offset', OFFSET_LABEL, '±', showOffsetDialog);
+        if (subBtn && subBtn.parentNode) {
+            parent.insertBefore(findBtn, subBtn);
+            parent.insertBefore(offsetBtn, subBtn);
+        } else {
+            parent.appendChild(findBtn);
+            parent.appendChild(offsetBtn);
+        }
+        console.info(LOG_PREFIX, 'Injected SST OSD buttons');
     }
 
     function attachSubtitleButtonListener() {
@@ -1935,6 +2012,7 @@
                     var node = added[j];
                     if (node.nodeType === Node.ELEMENT_NODE) {
                         scanForSubtitleActionSheets(node);
+                        injectOsdButtons();
                     }
                 }
             }
@@ -1942,10 +2020,12 @@
 
         observer.observe(document.body, { childList: true, subtree: true });
         scanForSubtitleActionSheets(document);
+        injectOsdButtons();
     }
 
     function watchPlaybackItemChanges() {
         setInterval(function () {
+            injectOsdButtons();
             getPlayingContext().then(function (ctx) {
                 resetOffsetIfItemChanged(ctx ? ctx.itemId : null);
             }).catch(function () {
@@ -1958,6 +2038,7 @@
         attachSubtitleButtonListener();
         startActionSheetObserver();
         watchPlaybackItemChanges();
+        injectOsdButtons();
         console.info(LOG_PREFIX, 'Web injection active (v' + SST_VERSION + ')');
     }
 
