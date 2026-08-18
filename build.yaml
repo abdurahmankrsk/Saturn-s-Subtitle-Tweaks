@@ -1,6 +1,6 @@
 name: "Saturn's Subtitle Tweaks"
 guid: "b3a1c2d4-e5f6-4a89-9bcd-1234567890ab"
-version: 18
+version: 19
 targetAbi: "10.11.0.0"
 framework: "net9.0"
 owner: "community"
@@ -13,6 +13,7 @@ category: "Subtitles"
 artifacts:
   - "Jellyfin.Plugin.SST.dll"
 changelog: |-
-  ## v1.3.1
-  - Remove leftover File Transformation / index.html disk writes that could crash the server
+  ## v1.3.2
+  - Apply only the downloaded subtitle; stop leaving Croatian/English on at the same time
+  - Keep the CC menu attached to the player; faster apply
 
