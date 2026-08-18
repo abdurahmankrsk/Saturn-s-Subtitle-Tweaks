@@ -17,6 +17,6 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
     /// <inheritdoc />
     public void RegisterServices(IServiceCollection serviceCollection, IServerApplicationHost applicationHost)
     {
-        serviceCollection.AddTransient<IStartupFilter, SstStartupFilter>();
+        serviceCollection.AddSingleton<IStartupFilter, SstStartupFilter>();
     }
 }
