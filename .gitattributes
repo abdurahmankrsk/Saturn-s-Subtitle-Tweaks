@@ -1,0 +1,13 @@
+# Client-side assets injected verbatim into Jellyfin Web at runtime.
+# They are required release assets (see SstHtmlInjectorMiddleware), not
+# the project's primary language — exclude them from GitHub's language
+# statistics so the repo is reported as C#/.NET.
+Jellyfin.Plugin.SST/Web/sst.js linguist-vendored=true
+Jellyfin.Plugin.SST/Web/sst.css linguist-vendored=true
+Jellyfin.Plugin.SST/Web/configPage.js linguist-vendored=true
+Jellyfin.Plugin.SST/Web/configPage.html linguist-vendored=true
+
+# Packaged release artifact required by manifest.json's sourceUrl
+# (Jellyfin fetches this zip directly from the repo). Not source code;
+# marked generated so it's also collapsed in PR diffs.
+Jellyfin.Plugin.SST.zip linguist-generated=true
