@@ -734,3 +734,157 @@ html.layout-tv .actionSheetMenuItem.sst-offset-item:focus {
     overflow-y: auto !important;
     -webkit-overflow-scrolling: touch;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   REMOTE SESSION BANNER
+   Shown on phone / PC when a TV is playing something SST can reach
+   only through the session remote-control API.
+   ═══════════════════════════════════════════════════════════════ */
+
+.sst-remote-banner {
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    transform: translateX(-50%);
+    z-index: 9999000;
+    display: flex;
+    align-items: stretch;
+    max-width: min(92vw, 460px);
+    background: radial-gradient(circle at 85% 15%, #232238 0%, #171720 60%, #121218 100%);
+    border: 1px solid rgba(243, 156, 18, 0.35);
+    border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65), 0 0 20px rgba(108, 92, 231, 0.18);
+    overflow: hidden;
+    animation: sst-remote-rise 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes sst-remote-rise {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(14px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+}
+
+.sst-remote-open {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 12px 14px;
+    border: none;
+    background: transparent;
+    color: #fff;
+    text-align: left;
+    cursor: pointer;
+    font-size: 0.95rem;
+    transition: background 0.15s;
+}
+
+.sst-remote-open:hover,
+.sst-remote-open:focus {
+    background: rgba(255, 255, 255, 0.07);
+    outline: none;
+}
+
+.sst-remote-glyph {
+    font-size: 1.5rem;
+    line-height: 1;
+    flex: 0 0 auto;
+}
+
+.sst-remote-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    gap: 2px;
+}
+
+.sst-remote-title {
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sst-remote-sub {
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.6);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sst-remote-dismiss {
+    flex: 0 0 auto;
+    width: 40px;
+    border: none;
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+    background: transparent;
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.sst-remote-dismiss:hover,
+.sst-remote-dismiss:focus {
+    background: rgba(255, 255, 255, 0.07);
+    color: #fff;
+    outline: none;
+}
+
+@media (max-width: 600px) {
+    .sst-remote-banner {
+        left: 12px;
+        right: 12px;
+        bottom: 76px;
+        max-width: none;
+        transform: none;
+    }
+
+    @keyframes sst-remote-rise {
+        from {
+            opacity: 0;
+            transform: translateY(14px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+}
+
+/* Target chip inside the dialog header — says where the download lands */
+.sst-target-chip {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 2px 9px;
+    border-radius: 999px;
+    background: rgba(0, 164, 220, 0.16);
+    border: 1px solid rgba(0, 164, 220, 0.4);
+    color: #6fd0f2;
+    font-size: 0.72rem;
+    font-weight: 600;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+/* Item detail page button (opt-in) */
+.sst-detail-glyph {
+    font-size: 1.4rem;
+    line-height: 1;
+}
+
+.sst-detail-btn .detailButton-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
