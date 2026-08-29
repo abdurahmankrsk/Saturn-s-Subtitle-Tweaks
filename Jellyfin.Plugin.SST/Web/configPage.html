@@ -27,6 +27,87 @@
                     </div>
                 </div>
 
+                <h3 class="sectionTitle sectionTitle-cards">TV and other devices</h3>
+                <div class="fieldDescription" style="margin-bottom: 1em;">
+                    Android TV, Google TV, Apple TV, Roku, webOS and Tizen apps do not load Jellyfin Web,
+                    so SST cannot put its menu inside them. These options let you drive those devices
+                    from a phone or PC instead.
+                </div>
+
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="enableRemoteBanner" />
+                        <span>Show a banner when another device is playing</span>
+                    </label>
+                    <div class="fieldDescription checkboxFieldDescription">
+                        On your phone or PC, SST offers to find subtitles for whatever your TV is playing.
+                    </div>
+                </div>
+
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="enableCastTargeting" />
+                        <span>Follow the cast target</span>
+                    </label>
+                    <div class="fieldDescription checkboxFieldDescription">
+                        When you cast to a device, SST points at that device instead of this one.
+                    </div>
+                </div>
+
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="enableDetailButton" />
+                        <span>Add a Subtitles button to the item page</span>
+                    </label>
+                    <div class="fieldDescription checkboxFieldDescription">
+                        Fetch subtitles for a title before anyone starts watching it.
+                    </div>
+                </div>
+
+                <h3 class="sectionTitle sectionTitle-cards">Automatic download</h3>
+                <div class="fieldDescription" style="margin-bottom: 1em;">
+                    Off by default. When enabled, the server searches for a subtitle each time playback
+                    starts without one and downloads the best match unattended. This runs on the server
+                    and calls out to your subtitle providers.
+                </div>
+
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="enableAutoDownload" />
+                        <span>Download a subtitle automatically when playback starts</span>
+                    </label>
+                    <div class="fieldDescription checkboxFieldDescription">
+                        The new track may not appear until the client restarts the video.
+                    </div>
+                </div>
+
+                <div class="inputContainer">
+                    <label class="inputLabel" for="autoDownloadLanguages">Automatic download languages</label>
+                    <input is="emby-input" type="text" id="autoDownloadLanguages"
+                        placeholder="e.g., eng,hrv (leave blank to use the default language above)" />
+                    <div class="fieldDescription">
+                        Comma-separated ISO 639-2 codes, tried in order.
+                    </div>
+                </div>
+
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="autoDownloadOnlyWhenNoSubtitles" />
+                        <span>Only when the item has no subtitles at all</span>
+                    </label>
+                    <div class="fieldDescription checkboxFieldDescription">
+                        Uncheck to also download when subtitles exist but none match your languages.
+                    </div>
+                </div>
+
+                <div class="inputContainer">
+                    <label class="inputLabel" for="autoDownloadTimeoutSeconds">Automatic download timeout (seconds)</label>
+                    <input is="emby-input" type="number" min="5" max="300" id="autoDownloadTimeoutSeconds" />
+                    <div class="fieldDescription">
+                        One attempt is abandoned after this long so a slow provider cannot pile up work.
+                    </div>
+                </div>
+
                 <h3 class="sectionTitle sectionTitle-cards">Subtitle Provider</h3>
                 <div class="fieldDescription" style="margin-bottom: 1em;">
                     SST uses Jellyfin's built-in subtitle provider system. To search and download subtitles,
