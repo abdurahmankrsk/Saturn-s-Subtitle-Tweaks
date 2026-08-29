@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST/Web/icon.png",
     "versions": [
       {
+        "version": "1.4.0.0",
+        "changelog": "TV clients: Android TV, Google TV, webOS and Tizen apps never load Jellyfin Web, so SST now drives them from your phone or PC. A banner offers to find subtitles for whatever your TV is playing, and the download is applied to that device. Optional server-side automatic download and an item-page button are off by default.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST.zip",
+        "checksum": "a11147b16ded9346f3423b51e918a6ce",
+        "timestamp": "2026-08-29T22:37:29Z"
+      },
+      {
         "version": "1.3.9.0",
         "changelog": "Crash fix: SST no longer wraps every Jellyfin request. After install, delete the old plugin folder if the server is down, then install 1.3.9 and restart once.",
         "targetAbi": "10.11.0.0",
