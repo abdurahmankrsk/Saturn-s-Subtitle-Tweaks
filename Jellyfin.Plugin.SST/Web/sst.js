@@ -14,7 +14,7 @@
         return;
     }
 
-    var SST_VERSION = '1.3.9.0';
+    var SST_VERSION = '1.4.0.0';
     var PLUGIN_ID = 'b3a1c2d4-e5f6-4a89-9bcd-1234567890ab';
     var LOG_PREFIX = '[SST]';
     var FIND_SUBTITLES_ID = 'sst-find-subtitles';
@@ -23,6 +23,9 @@
     var OFFSET_LABEL = '🪐 Subtitle Offset';
     var INJECTED_ITEM_CLASS = 'sst-find-subtitles-item';
     var OFFSET_ITEM_CLASS = 'sst-offset-item';
+    var REMOTE_BANNER_ID = 'sst-remote-banner';
+    var DETAIL_BTN_CLASS = 'sst-detail-btn';
+    var REMOTE_POLL_MS = 20000;
 
     var COMMON_LANGUAGES = [
         { code: 'eng', name: 'English' },
@@ -70,6 +73,10 @@
     var escapeDiv = document.createElement('div');
     var DOWNLOAD_STORE_KEY = 'sst-downloaded-subtitles';
     var inFlightDownloads = {};
+    var remotePollTimer = null;
+    var dismissedSessions = {};
+    var detailScanTimer = null;
+    var cachedConfig = null;
 
     function getServerRoot() {
         try {
@@ -1010,6 +1017,254 @@
         }
     }
 
+
+    /* ---------------------------------------------------------------
+       REMOTE SESSIONS
+       Control a client that cannot load SST itself (Android TV, Google
+       TV, webOS, Tizen). Those clients never fetch /web/index.html, so
+       the only way in is Jellyfin's session remote-control API.
+       --------------------------------------------------------------- */
+
+    function isControllableRemoteSession(session, ownDeviceId) {
+        if (!session || !session.NowPlayingItem || !session.NowPlayingItem.Id) {
+            return false;
+        }
+        if (session.SupportsRemoteControl === false) {
+            return false;
+        }
+        if (ownDeviceId && session.DeviceId === ownDeviceId) {
+            return false;
+        }
+        return true;
+    }
+
+    function sessionLabel(session) {
+        return session.DeviceName || session.Client || 'that device';
+    }
+
+    function contextFromSession(session) {
+        var state = session.PlayState || {};
+        return {
+            itemId: session.NowPlayingItem.Id,
+            mediaSourceId: state.MediaSourceId || session.NowPlayingItem.Id,
+            title: formatTitle(session.NowPlayingItem),
+            sessionId: session.Id,
+            subtitleCount: countSubtitleStreams(session.NowPlayingItem),
+            remote: true,
+            deviceName: sessionLabel(session),
+            positionTicks: state.PositionTicks || 0
+        };
+    }
+
+    async function fetchSessions() {
+        var api = getApiClient();
+        if (!api || typeof api.getJSON !== 'function' || typeof api.getUrl !== 'function') {
+            return [];
+        }
+        try {
+            return (await api.getJSON(api.getUrl('Sessions', { activeWithinSeconds: 300 }))) || [];
+        } catch (e) {
+            console.debug(LOG_PREFIX, 'session list failed', e);
+            return [];
+        }
+    }
+
+    async function listRemoteSessions() {
+        var api = getApiClient();
+        var ownDeviceId = api ? getDeviceId(api) : '';
+        var sessions = await fetchSessions();
+        var out = [];
+        for (var i = 0; i < sessions.length; i++) {
+            if (isControllableRemoteSession(sessions[i], ownDeviceId)) {
+                out.push(sessions[i]);
+            }
+        }
+        return out;
+    }
+
+    async function refreshSession(sessionId) {
+        var sessions = await fetchSessions();
+        for (var i = 0; i < sessions.length; i++) {
+            if (sessions[i].Id === sessionId) {
+                return sessions[i];
+            }
+        }
+        return null;
+    }
+
+    // The remote client negotiated its MediaSource before this file existed,
+    // so poll the item until the freshly downloaded stream shows up.
+    async function findNewSubtitleIndex(itemId, previousIndexes, language, releaseName) {
+        var previous = previousIndexes || [];
+        for (var attempt = 0; attempt < 20; attempt++) {
+            if (attempt > 0) {
+                await sleep(300);
+            }
+            try {
+                var snapshot = await getItemSubtitleStreams(itemId);
+                var ranked = rankApplyCandidates(snapshot.streams, previous, normalizeLang(language), releaseName);
+                for (var i = 0; i < ranked.length; i++) {
+                    if (previous.indexOf(ranked[i].stream.Index) === -1) {
+                        return ranked[i].stream.Index;
+                    }
+                }
+            } catch (e) {
+                console.debug(LOG_PREFIX, 'new subtitle poll failed', e);
+            }
+        }
+        return null;
+    }
+
+    async function sendSessionSubtitleIndex(sessionId, index) {
+        var api = getApiClient();
+        if (!api || typeof api.ajax !== 'function') {
+            return false;
+        }
+        try {
+            await api.ajax({
+                type: 'POST',
+                url: api.getUrl('Sessions/' + sessionId + '/Command'),
+                data: JSON.stringify({
+                    Name: 'SetSubtitleStreamIndex',
+                    Arguments: { Index: String(index) }
+                }),
+                contentType: 'application/json'
+            });
+            return true;
+        } catch (e) {
+            console.debug(LOG_PREFIX, 'remote SetSubtitleStreamIndex failed', e);
+            return false;
+        }
+    }
+
+    // Fallback: replay the same item at the same position with the track
+    // pre-selected. Costs a re-buffer but every native client honours it.
+    async function restartSessionWithSubtitle(ctx, index) {
+        var api = getApiClient();
+        if (!api || typeof api.ajax !== 'function') {
+            return false;
+        }
+
+        var position = ctx.positionTicks || 0;
+        var live = await refreshSession(ctx.sessionId);
+        if (live && live.PlayState && live.PlayState.PositionTicks) {
+            position = live.PlayState.PositionTicks;
+        }
+
+        try {
+            await api.ajax({
+                type: 'POST',
+                url: api.getUrl('Sessions/' + ctx.sessionId + '/Playing', {
+                    playCommand: 'PlayNow',
+                    itemIds: ctx.itemId,
+                    startPositionTicks: position,
+                    subtitleStreamIndex: index
+                })
+            });
+            return true;
+        } catch (e) {
+            console.debug(LOG_PREFIX, 'remote restart failed', e);
+            return false;
+        }
+    }
+
+    async function applySubtitleToRemoteSession(ctx, index) {
+        if (await sendSessionSubtitleIndex(ctx.sessionId, index)) {
+            for (var attempt = 0; attempt < 6; attempt++) {
+                await sleep(400);
+                var live = await refreshSession(ctx.sessionId);
+                if (live && live.PlayState && live.PlayState.SubtitleStreamIndex === index) {
+                    return 'command';
+                }
+            }
+        }
+
+        if (await restartSessionWithSubtitle(ctx, index)) {
+            return 'restart';
+        }
+        return null;
+    }
+
+    async function getSstConfig() {
+        if (cachedConfig) {
+            return cachedConfig;
+        }
+        var defaults = {
+            EnableRemoteBanner: true,
+            EnableDetailButton: false,
+            EnableCastTargeting: true
+        };
+        var api = getApiClient();
+        if (!api || typeof api.getPluginConfiguration !== 'function') {
+            cachedConfig = defaults;
+            return cachedConfig;
+        }
+        try {
+            var config = await api.getPluginConfiguration(PLUGIN_ID);
+            cachedConfig = {
+                EnableRemoteBanner: config.EnableRemoteBanner !== false,
+                EnableDetailButton: config.EnableDetailButton === true,
+                EnableCastTargeting: config.EnableCastTargeting !== false
+            };
+        } catch (e) {
+            console.debug(LOG_PREFIX, 'plugin config unavailable, using defaults', e);
+            cachedConfig = defaults;
+        }
+        return cachedConfig;
+    }
+
+    // When the user has cast to another device, jellyfin-web swaps in a
+    // non-local player whose id is the target session id. Point SST there
+    // instead of at the (idle) local player.
+    function getCastPlayerSessionId() {
+        var pbm = getPlaybackManager();
+        if (!pbm) {
+            return null;
+        }
+        try {
+            var player = null;
+            if (typeof pbm.getCurrentPlayer === 'function') {
+                player = pbm.getCurrentPlayer();
+            } else if (typeof pbm.getPlayer === 'function') {
+                player = pbm.getPlayer();
+            }
+            if (player && player.isLocalPlayer === false) {
+                return player.id || player.Id || null;
+            }
+        } catch (e) {
+            console.debug(LOG_PREFIX, 'cast player lookup failed', e);
+        }
+        return null;
+    }
+
+    async function getCastSessionContext() {
+        var sessionId = getCastPlayerSessionId();
+        if (!sessionId) {
+            return null;
+        }
+        var session = await refreshSession(sessionId);
+        if (session && session.NowPlayingItem) {
+            return contextFromSession(session);
+        }
+        return null;
+    }
+
+    // Resolution order: an explicit target, then a cast target, then whatever
+    // is playing locally. Returns the same shape everywhere so the search and
+    // download paths do not need to care.
+    async function resolveContext(explicitContext) {
+        if (explicitContext) {
+            return explicitContext;
+        }
+        var config = await getSstConfig();
+        if (config.EnableCastTargeting) {
+            var cast = await getCastSessionContext();
+            if (cast) {
+                return cast;
+            }
+        }
+        return await getPlayingContext();
+    }
     async function turnOffAllSubtitles() {
         stopSstOverlay();
         sstOverlayCues = [];
@@ -1201,13 +1456,13 @@
         display.className = currentOffset === 0 ? '' : (currentOffset > 0 ? 'sst-offset-positive' : 'sst-offset-negative');
     }
 
-    async function showFindDialog() {
+    async function showFindDialog(contextOverride) {
         await mountDialog(buildFindDialogHtml, function (dialog, playing, languageOptions) {
             bindFindDialogEvents(dialog, playing, languageOptions);
             if (playing && playing.itemId) {
                 performSearch(playing, dialog.querySelector('#sst-language').value, dialog, languageOptions);
             }
-        });
+        }, contextOverride);
     }
 
     async function showOffsetDialog() {
@@ -1215,6 +1470,19 @@
             bindOffsetDialogEvents(dialog);
             updateOffsetDisplay(dialog);
         });
+    }
+
+    function contextHeadline(playing) {
+        if (!playing || !playing.itemId) {
+            return escapeHtml('Start playback to search subtitles for the current title.');
+        }
+        var html = escapeHtml(playing.title);
+        if (playing.remote) {
+            html += '<span class="sst-target-chip">Playing on ' + escapeHtml(playing.deviceName) + '</span>';
+        } else if (playing.library) {
+            html += '<span class="sst-target-chip">Library only &mdash; nothing is playing</span>';
+        }
+        return html;
     }
 
     function buildFindDialogHtml(playing, languages) {
@@ -1231,7 +1499,7 @@
             '  </div>' +
             '  <div class="sst-dialog-body">' +
             '    <div class="sst-media-info" id="sst-media-info">' +
-            escapeHtml(playing ? playing.title : 'Start playback to search subtitles for the current title.') +
+            contextHeadline(playing) +
             '    </div>' +
             '    <div class="sst-search-controls">' +
             '      <div class="sst-language-row">' +
@@ -1272,11 +1540,12 @@
             '</div>';
     }
 
-    async function mountDialog(htmlBuilder, afterMount) {
+    async function mountDialog(htmlBuilder, afterMount, contextOverride) {
         closeDialog(true);
 
         isDialogOpen = true;
-        var playing = await getPlayingContext();
+        removeRemoteBanner();
+        var playing = await resolveContext(contextOverride);
         resetOffsetIfItemChanged(playing ? playing.itemId : null);
         var languages = await getLanguageChoices();
 
@@ -1398,11 +1667,11 @@
         var searchBtn = dialog.querySelector('#sst-search-btn');
 
         if (!playing || !playing.itemId) {
-            playing = await getPlayingContext();
+            playing = await resolveContext(null);
             if (playing && playing.itemId) {
                 var mediaInfo = dialog.querySelector('#sst-media-info');
                 if (mediaInfo) {
-                    mediaInfo.textContent = playing.title;
+                    mediaInfo.innerHTML = contextHeadline(playing);
                 }
             }
         }
@@ -1517,6 +1786,45 @@
             var previousIndexes = existingStreams.map(function (s) {
                 return s.Index;
             });
+
+            // Remote and library targets have no local <video> to paint cues
+            // onto, so they skip the overlay path entirely.
+            if (playing.remote || playing.library) {
+                await downloadSubtitle(playing.itemId, subtitleId);
+                markSubtitleDownloaded(playing.itemId, subtitleId, releaseName, language);
+                markResultRowDownloaded(button);
+                statusEl.className = 'sst-status sst-status-success';
+                statusEl.style.display = 'block';
+
+                if (playing.library) {
+                    statusEl.innerHTML = 'Downloaded to the library. It will be available the next time this title plays.';
+                    return;
+                }
+
+                statusEl.innerHTML = 'Downloaded. Sending to ' + escapeHtml(playing.deviceName) + '&hellip;';
+
+                var newIndex = await findNewSubtitleIndex(playing.itemId, previousIndexes, language, releaseName);
+                if (newIndex === null) {
+                    statusEl.innerHTML = 'Downloaded to the library, but the new track did not appear in time. Open the subtitle menu on ' +
+                        escapeHtml(playing.deviceName) + ' and pick it there.';
+                    statusEl.className = 'sst-status sst-status-error';
+                    return;
+                }
+
+                var how = await applySubtitleToRemoteSession(playing, newIndex);
+                if (how === 'command') {
+                    statusEl.innerHTML = 'Subtitle applied on ' + escapeHtml(playing.deviceName) + '.';
+                } else if (how === 'restart') {
+                    statusEl.innerHTML = 'Subtitle applied on ' + escapeHtml(playing.deviceName) +
+                        '. Playback resumed from the same spot so the new track could load.';
+                } else {
+                    statusEl.innerHTML = 'Downloaded to the library, but ' + escapeHtml(playing.deviceName) +
+                        ' did not accept the change. Open the subtitle menu there and pick it manually.';
+                    statusEl.className = 'sst-status sst-status-error';
+                }
+                return;
+            }
+
             var existingSignatures = {};
             try {
                 existingSignatures = await snapshotExistingVtts(
@@ -1558,6 +1866,227 @@
         } finally {
             delete inFlightDownloads[flightKey];
         }
+    }
+
+    /* ---------------------------------------------------------------
+       REMOTE ENTRY POINTS
+       The CC menu only exists during local playback, so a phone driving
+       a TV needs its own way into the picker.
+       --------------------------------------------------------------- */
+
+    function removeRemoteBanner() {
+        var existing = document.getElementById(REMOTE_BANNER_ID);
+        if (existing && existing.parentNode) {
+            existing.parentNode.removeChild(existing);
+        }
+    }
+
+    function isLocalPlaybackActive() {
+        if (getCastPlayerSessionId()) {
+            return false;
+        }
+        var pbm = getPlaybackManager();
+        try {
+            if (pbm && typeof pbm.isPlayingVideo === 'function') {
+                return pbm.isPlayingVideo();
+            }
+        } catch (e) {
+            console.debug(LOG_PREFIX, 'local playback check failed', e);
+        }
+        return !!document.querySelector('video.htmlvideoplayer');
+    }
+
+    function renderRemoteBanner(session) {
+        var existing = document.getElementById(REMOTE_BANNER_ID);
+        if (existing && existing.getAttribute('data-session-id') === session.Id) {
+            return;
+        }
+        removeRemoteBanner();
+
+        var banner = document.createElement('div');
+        banner.id = REMOTE_BANNER_ID;
+        banner.className = 'sst-remote-banner';
+        banner.setAttribute('data-session-id', session.Id);
+        banner.innerHTML =
+            '<button type="button" class="sst-remote-open">' +
+            '<span class="sst-remote-glyph">' + FIND_SUBTITLES_LABEL.split(' ')[0] + '</span>' +
+            '<span class="sst-remote-text">' +
+            '<span class="sst-remote-title">Find subtitles for ' + escapeHtml(sessionLabel(session)) + '</span>' +
+            '<span class="sst-remote-sub">' + escapeHtml(formatTitle(session.NowPlayingItem)) + '</span>' +
+            '</span>' +
+            '</button>' +
+            '<button type="button" class="sst-remote-dismiss" title="Hide" aria-label="Hide">&#10005;</button>';
+
+        banner.querySelector('.sst-remote-open').addEventListener('click', function () {
+            showFindDialog(contextFromSession(session));
+        });
+        banner.querySelector('.sst-remote-dismiss').addEventListener('click', function () {
+            dismissedSessions[session.Id] = true;
+            removeRemoteBanner();
+        });
+
+        document.body.appendChild(banner);
+    }
+
+    async function pollRemoteSessions() {
+        if (isDialogOpen || document.hidden || isLocalPlaybackActive()) {
+            removeRemoteBanner();
+            return;
+        }
+
+        var config = await getSstConfig();
+        if (!config.EnableRemoteBanner) {
+            removeRemoteBanner();
+            return;
+        }
+
+        var sessions = await listRemoteSessions();
+        var pick = null;
+        for (var i = 0; i < sessions.length; i++) {
+            if (!dismissedSessions[sessions[i].Id]) {
+                pick = sessions[i];
+                break;
+            }
+        }
+
+        if (pick) {
+            renderRemoteBanner(pick);
+        } else {
+            removeRemoteBanner();
+        }
+    }
+
+    function safePollRemoteSessions() {
+        pollRemoteSessions().catch(function (e) {
+            console.debug(LOG_PREFIX, 'remote session poll failed', e);
+        });
+    }
+
+    function startRemoteSessionWatch() {
+        if (remotePollTimer) {
+            return;
+        }
+        remotePollTimer = setInterval(safePollRemoteSessions, REMOTE_POLL_MS);
+        safePollRemoteSessions();
+    }
+
+    function stopRemoteSessionWatch() {
+        if (remotePollTimer) {
+            clearInterval(remotePollTimer);
+            remotePollTimer = null;
+        }
+        removeRemoteBanner();
+    }
+
+    /* ---------------------------------------------------------------
+       ITEM DETAIL BUTTON
+       Off by default. Fetches subtitles for a title before anyone
+       starts watching it.
+       --------------------------------------------------------------- */
+
+    function getDetailPageItemId() {
+        var hash = window.location.hash || '';
+        if (hash.indexOf('details') === -1) {
+            return null;
+        }
+        var match = /[?&]id=([^&]+)/.exec(hash);
+        return match ? decodeURIComponent(match[1]) : null;
+    }
+
+    function removeDetailButton() {
+        var stale = document.querySelectorAll('.' + DETAIL_BTN_CLASS);
+        for (var i = 0; i < stale.length; i++) {
+            if (stale[i].parentNode) {
+                stale[i].parentNode.removeChild(stale[i]);
+            }
+        }
+    }
+
+    async function buildLibraryContext(itemId) {
+        var api = getApiClient();
+        var title = 'Selected title';
+        var count = 0;
+        try {
+            var userId = typeof api.getCurrentUserId === 'function' ? api.getCurrentUserId() : '';
+            var item = await api.getItem(userId, itemId);
+            title = formatTitle(item);
+            count = countSubtitleStreams(item);
+        } catch (e) {
+            console.debug(LOG_PREFIX, 'detail item lookup failed', e);
+        }
+        return {
+            itemId: itemId,
+            mediaSourceId: itemId,
+            title: title,
+            sessionId: null,
+            subtitleCount: count,
+            remote: false,
+            library: true
+        };
+    }
+
+    async function openDetailPicker(itemId) {
+        var ctx = await resolveContext(null);
+        if (!ctx || ctx.itemId !== itemId) {
+            ctx = await buildLibraryContext(itemId);
+        }
+        showFindDialog(ctx);
+    }
+
+    async function injectDetailButton() {
+        var config = await getSstConfig();
+        if (!config.EnableDetailButton) {
+            removeDetailButton();
+            return;
+        }
+
+        var itemId = getDetailPageItemId();
+        if (!itemId) {
+            removeDetailButton();
+            return;
+        }
+
+        var host = document.querySelector('.mainDetailButtons');
+        if (!host) {
+            return;
+        }
+
+        var existing = host.querySelector('.' + DETAIL_BTN_CLASS);
+        if (existing) {
+            if (existing.getAttribute('data-item-id') === itemId) {
+                return;
+            }
+            if (existing.parentNode) {
+                existing.parentNode.removeChild(existing);
+            }
+        }
+
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'detailButton emby-button ' + DETAIL_BTN_CLASS;
+        btn.setAttribute('data-item-id', itemId);
+        btn.title = FIND_SUBTITLES_LABEL;
+        btn.innerHTML =
+            '<div class="detailButton-content">' +
+            '<span class="sst-detail-glyph">' + FIND_SUBTITLES_LABEL.split(' ')[0] + '</span>' +
+            '<div class="detailButton-text">Subtitles</div>' +
+            '</div>';
+        btn.addEventListener('click', function () {
+            openDetailPicker(itemId);
+        });
+        host.appendChild(btn);
+    }
+
+    function scheduleDetailButtonScan() {
+        if (detailScanTimer) {
+            return;
+        }
+        detailScanTimer = setTimeout(function () {
+            detailScanTimer = null;
+            injectDetailButton().catch(function (e) {
+                console.debug(LOG_PREFIX, 'detail button inject failed', e);
+            });
+        }, 150);
     }
 
     function isSubtitleTrackActionSheet(sheet) {
@@ -1937,6 +2466,7 @@
             scanTimer = setTimeout(function () {
                 scanTimer = null;
                 scanForSubtitleActionSheets(document);
+                scheduleDetailButtonScan();
             }, 80);
         });
 
@@ -1944,9 +2474,24 @@
         scanForSubtitleActionSheets(document);
     }
 
+    function attachNavigationListeners() {
+        window.addEventListener('hashchange', function () {
+            scheduleDetailButtonScan();
+            safePollRemoteSessions();
+        });
+        document.addEventListener('visibilitychange', function () {
+            if (!document.hidden) {
+                safePollRemoteSessions();
+            }
+        });
+    }
+
     function initWebInject() {
         attachSubtitleButtonListener();
         startActionSheetObserver();
+        attachNavigationListeners();
+        startRemoteSessionWatch();
+        scheduleDetailButtonScan();
         console.info(LOG_PREFIX, 'Web injection active (v' + SST_VERSION + ')');
     }
 
@@ -1957,6 +2502,8 @@
         }
         subtitleButtonListenerAttached = false;
         stopSstOverlay();
+        stopRemoteSessionWatch();
+        removeDetailButton();
     }
 
     window.SST = {
@@ -1966,9 +2513,16 @@
         Core: {
             getServerRoot: getServerRoot,
             getPlayingContext: getPlayingContext,
+            resolveContext: resolveContext,
             search: searchSubtitles,
             download: downloadSubtitle,
             setOffset: applySubtitleOffset
+        },
+        Remote: {
+            list: listRemoteSessions,
+            context: contextFromSession,
+            apply: applySubtitleToRemoteSession,
+            poll: safePollRemoteSessions
         },
         UI: {
             show: showFindDialog,
