@@ -2,6 +2,19 @@
 
 All notable changes to Saturn's Subtitle Tweaks (SST) will be documented in this file.
 
+## [1.4.0] - 2026-08-29
+
+### Added
+- **Subtitle picker for TV clients.** Android TV, Google TV, webOS, Tizen, Apple TV and Roku never load Jellyfin Web, so SST could not put its menu inside them. It now drives those devices from a phone or PC over Jellyfin's session remote-control API: pick a subtitle there, SST downloads it and applies it on the TV.
+- Banner on phone / PC when another device is playing something SST can reach. One tap opens the usual picker, already pointed at that device.
+- SST follows the cast target: cast to a device and the picker acts on it instead of the local player.
+- Optional **Subtitles** button on the item page, for fetching subtitles before anyone starts watching. Off by default.
+- Optional server-side automatic download when playback starts without a subtitle. Off by default, per-item timeout, never blocks playback.
+- `scripts/patch-tv-web.ps1` bakes SST into a jellyfin-web build so custom Samsung / LG app packages ship with the full in-player menu. See [`docs/TV-CLIENTS.md`](docs/TV-CLIENTS.md).
+
+### Notes
+- Applying a subtitle to a device that is already playing may resume the video from the same spot. The client negotiated its track list before the file existed, so a replay is sometimes the only way it will pick the new track up.
+
 ## [1.3.9] - 2026-08-18
 
 ### Fixed
