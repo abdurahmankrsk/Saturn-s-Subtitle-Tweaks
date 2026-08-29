@@ -31,27 +31,28 @@ public sealed partial class SubtitleAutoDownloadService : IHostedService, IDispo
 {
     private const int RecentMemoryLimit = 256;
 
-    private readonly ISessionManager _sessionManager;
-    private readonly ISubtitleManager _subtitleManager;
+    private readonly IServiceProvider _services;
     private readonly ILogger<SubtitleAutoDownloadService> _logger;
     private readonly ConcurrentDictionary<Guid, byte> _inFlight = new();
     private readonly ConcurrentQueue<Guid> _recent = new();
 
-    private bool _subscribed;
+    private ISessionManager? _sessionManager;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="SubtitleAutoDownloadService"/> class.
+    ///
+    /// Takes only the service provider. A hosted service whose constructor cannot be
+    /// satisfied brings the whole host down with it, and SST must never be the reason
+    /// Jellyfin fails to start, so every other dependency is resolved lazily inside a
+    /// try/catch.
     /// </summary>
-    /// <param name="sessionManager">Session manager.</param>
-    /// <param name="subtitleManager">Subtitle manager.</param>
+    /// <param name="services">Service provider.</param>
     /// <param name="logger">Logger.</param>
     public SubtitleAutoDownloadService(
-        ISessionManager sessionManager,
-        ISubtitleManager subtitleManager,
+        IServiceProvider services,
         ILogger<SubtitleAutoDownloadService> logger)
     {
-        _sessionManager = sessionManager;
-        _subtitleManager = subtitleManager;
+        _services = services;
         _logger = logger;
     }
 
@@ -61,8 +62,15 @@ public sealed partial class SubtitleAutoDownloadService : IHostedService, IDispo
 #pragma warning disable CA1031
         try
         {
-            _sessionManager.PlaybackStart += OnPlaybackStart;
-            _subscribed = true;
+            var sessionManager = _services.GetService(typeof(ISessionManager)) as ISessionManager;
+            if (sessionManager is null)
+            {
+                LogSubscribeFailed(_logger, new InvalidOperationException("ISessionManager is not registered"));
+                return Task.CompletedTask;
+            }
+
+            sessionManager.PlaybackStart += OnPlaybackStart;
+            _sessionManager = sessionManager;
         }
         catch (Exception ex)
         {
@@ -131,10 +139,10 @@ public sealed partial class SubtitleAutoDownloadService : IHostedService, IDispo
 #pragma warning disable CA1031
         try
         {
-            if (_subscribed)
+            if (_sessionManager is not null)
             {
                 _sessionManager.PlaybackStart -= OnPlaybackStart;
-                _subscribed = false;
+                _sessionManager = null;
             }
         }
         catch (Exception ex)
@@ -222,11 +230,16 @@ public sealed partial class SubtitleAutoDownloadService : IHostedService, IDispo
             return;
         }
 
+        if (_services.GetService(typeof(ISubtitleManager)) is not ISubtitleManager subtitleManager)
+        {
+            return;
+        }
+
         foreach (var language in languages)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var results = await _subtitleManager
+            var results = await subtitleManager
                 .SearchSubtitles(video, language, null, true, cancellationToken)
                 .ConfigureAwait(false);
 
@@ -242,7 +255,7 @@ public sealed partial class SubtitleAutoDownloadService : IHostedService, IDispo
                 continue;
             }
 
-            await _subtitleManager
+            await subtitleManager
                 .DownloadSubtitles(video, pick.Id, cancellationToken)
                 .ConfigureAwait(false);
 
