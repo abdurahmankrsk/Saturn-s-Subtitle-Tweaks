@@ -85,10 +85,16 @@ YMMMUP^
 - Immediate audio-visual sync without reloading streams.
 - **Session-bound**: offset safely resets to `0.0s` when playback concludes — no accidental database persistence.
 
+### 📡 Remote Control for TV Clients
+- TV apps (Android TV, Google TV, webOS, Tizen, Apple TV, Roku) do **not** load Jellyfin Web, so SST cannot place its menu inside them.
+- Instead, drive them from your phone or PC: SST offers a one-tap banner for whatever your TV is playing, downloads your pick, and switches the TV to it.
+- Optional server-side automatic download covers every client with no UI at all.
+- See [`docs/TV-CLIENTS.md`](docs/TV-CLIENTS.md) for the full picture, including how to build a Samsung/LG app with SST baked in.
+
 ### 📱 Responsive & Adaptive Viewport
 - **Desktop**: Fast keyboard shortcuts (`Esc` to close, `Enter` to search) and mouse navigation.
 - **Mobile**: Touch-optimized full-screen modal sheets.
-- **TV / Large Screen**: High-visibility focus indicators designed for D-Pad and remote controls.
+- **Jellyfin Web in TV display mode**: High-visibility focus indicators for D-Pad and remote controls. This is the web client's TV layout, not the native TV apps.
 
 ---
 
@@ -202,15 +208,24 @@ For containerized environments with read-only filesystems, add the tags manually
 
 ## 🌌 Supported Fleet (Client Matrix)
 
-| Client | SST In-Player UI | Subtitle REST API | Notes |
+| Client | SST In-Player UI | Drive it from phone/PC | Notes |
 | :--- | :---: | :---: | :--- |
-| **Jellyfin Web (Desktop & Mobile)** | 🪐 Full Support | ✅ Supported | Primary client target |
-| **Jellyfin Android (Web Player)** | 🪐 Full Support | ✅ Supported | Supported in WebView player mode |
-| **Jellyfin Android (ExoPlayer)** | ⚠️ API Only | ✅ Supported | Native UI integration required |
-| **Jellyfin Android TV** | ⚠️ API Only | ✅ Supported | Native Android TV app |
-| **Jellyfin iOS (Swiftfin)** | ⚠️ API Only | ✅ Supported | Native SwiftUI client |
-| **Jellyfin Desktop (Qt/MPV)** | ⚠️ API Only | ✅ Supported | Uses Qt/libmpv engine |
-| **Kodi Jellyfin Addon** | ⚠️ API Only | ✅ Supported | Uses Kodi subtitle subsystem |
+| **Jellyfin Web (Desktop & Mobile)** | 🪐 Full Support | — | Primary client target |
+| **Jellyfin Android (Web Player)** | 🪐 Full Support | — | WebView loads your server's web client |
+| **Jellyfin Android (ExoPlayer)** | ❌ Native player | 🛰️ Yes | Switch the player to *Web player* for the full UI |
+| **Jellyfin Android TV / Google TV** | ❌ Native app | 🛰️ Yes | No `jellyfin-web` in the app at all |
+| **Fire TV** | ❌ Native app | 🛰️ Yes | Same Android TV app |
+| **Samsung (Tizen)** | ❌ Bundled web | 🛰️ Yes | `jellyfin-web` ships inside the `.wgt`; see [`docs/TV-CLIENTS.md`](docs/TV-CLIENTS.md) |
+| **LG (webOS)** | ❌ Bundled web | 🛰️ Yes | `jellyfin-web` ships inside the `.ipk`; see [`docs/TV-CLIENTS.md`](docs/TV-CLIENTS.md) |
+| **Jellyfin iOS (Swiftfin)** | ❌ Native app | 🛰️ Yes | Native SwiftUI client |
+| **Jellyfin Desktop (Qt/MPV)** | ❌ Bundled web | 🛰️ Yes | Uses Qt/libmpv engine |
+| **Kodi Jellyfin Addon** | ❌ Native | 🛰️ Yes | Uses Kodi subtitle subsystem |
+
+> [!NOTE]
+> **Why the ❌ column.** SST injects itself into `jellyfin-web`'s `index.html` as your server
+> serves it. Native apps never load that page, and the smart-TV apps package their own copy of
+> `jellyfin-web` inside the app. Server-side injection cannot reach either. The remote-control
+> column is how SST covers them anyway.
 
 ---
 
