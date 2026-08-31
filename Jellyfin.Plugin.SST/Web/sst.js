@@ -26,6 +26,8 @@
     var REMOTE_BANNER_ID = 'sst-remote-banner';
     var DETAIL_BTN_CLASS = 'sst-detail-btn';
     var REMOTE_POLL_MS = 20000;
+    var SHEET_MARGIN = 8;
+    var MIN_SHEET_SCROLLER_HEIGHT = 120;
 
     var COMMON_LANGUAGES = [
         { code: 'eng', name: 'English' },
@@ -2307,24 +2309,38 @@
         });
     }
 
+    function getViewportHeight() {
+        return (window.visualViewport && window.visualViewport.height) || window.innerHeight || 0;
+    }
+
     function getOsdBottomLimit() {
-        var viewportH = (window.visualViewport && window.visualViewport.height) || window.innerHeight || 0;
-        var limit = viewportH - 8;
+        var viewportH = getViewportHeight();
+        var limit = viewportH - SHEET_MARGIN;
         var osd = document.querySelector('.videoOsdBottom');
         if (!osd || osd.classList.contains('hide')) {
             return limit;
         }
         var osdRect = osd.getBoundingClientRect();
         if (osdRect.top > 40 && osdRect.top < viewportH - 24 && osdRect.height > 16) {
-            return osdRect.top - 8;
+            return osdRect.top - SHEET_MARGIN;
         }
         return limit;
     }
 
+    /**
+     * Where Jellyfin pinned the sheet, as a plain layout offset (a client rect
+     * would report the entry animation's scaled box instead). NaN when Jellyfin
+     * did not anchor it — a centered sheet is laid out by its container and must
+     * not be moved.
+     */
+    function readSheetTop(sheet) {
+        return parseFloat(sheet.style.top);
+    }
+
     function isPopoverActionSheet(sheet) {
-        var rect = sheet.getBoundingClientRect();
+        var width = sheet.offsetWidth || 0;
         var vw = window.innerWidth || 0;
-        return vw > 0 && rect.width > 0 && rect.width < vw * 0.72;
+        return vw > 0 && width > 0 && width < vw * 0.72;
     }
 
     function clearSheetConstraint(sheet) {
@@ -2335,6 +2351,10 @@
         sheet.style.removeProperty('transform');
         sheet.style.removeProperty('max-height');
         sheet.style.removeProperty('overflow');
+        var anchorTop = sheet.getAttribute('data-sst-anchor-top');
+        if (anchorTop) {
+            sheet.style.setProperty('top', anchorTop + 'px');
+        }
         var scroller = sheet.querySelector('.actionSheetScroller');
         if (scroller) {
             scroller.style.removeProperty('max-height');
@@ -2342,6 +2362,16 @@
         }
     }
 
+    /**
+     * Jellyfin positions the popover action sheet from the height it had *before*
+     * we injected our rows, so the extra rows hang off the bottom of the screen.
+     * Nudge the sheet back up and cap its height so every row stays reachable.
+     *
+     * The sheet carries an inline `animation: scaleup ... both`, and a filling CSS
+     * animation outranks plain inline styles — so `transform` cannot move it.
+     * `top` is not animated, which is why the repositioning goes through `top`
+     * (with !important, since the sheet's own inline `top` is what we override).
+     */
     function constrainActionSheetScroller(sheet) {
         if (!sheet || !sheet.isConnected) {
             return;
@@ -2352,40 +2382,75 @@
             return;
         }
 
+        // Drop our own adjustments first so the sheet reports its natural size.
         sheet.style.removeProperty('transform');
+        sheet.classList.remove('sst-cc-constrained');
+        sheet.style.removeProperty('max-height');
+        sheet.style.removeProperty('overflow');
 
-        var sheetRect = sheet.getBoundingClientRect();
-        var bottomLimit = getOsdBottomLimit();
-        var overflow = sheetRect.bottom - bottomLimit;
-        if (overflow > 1) {
-            var maxShift = Math.max(0, sheetRect.top - 8);
-            var shift = Math.round(Math.min(overflow, maxShift));
-            if (shift > 0) {
-                sheet.style.transform = 'translateY(' + (-shift) + 'px)';
-            }
+        var scroller = sheet.querySelector('.actionSheetScroller');
+        if (scroller) {
+            scroller.style.removeProperty('max-height');
+            scroller.style.removeProperty('overflow-y');
         }
 
-        var placed = sheet.getBoundingClientRect();
-        var available = Math.floor(bottomLimit - placed.top);
-        if (available < 280) {
+        // Remember where Jellyfin anchored the sheet — every pass starts from there.
+        var anchorTop = sheet.getAttribute('data-sst-anchor-top');
+        if (anchorTop === null) {
+            var measured = readSheetTop(sheet);
+            anchorTop = isNaN(measured) ? '' : String(Math.round(measured));
+            sheet.setAttribute('data-sst-anchor-top', anchorTop);
+        } else if (anchorTop !== '') {
+            sheet.style.setProperty('top', anchorTop + 'px', 'important');
+        }
+
+        // offset* metrics, not getBoundingClientRect: the entry animation scales the
+        // sheet, and a client rect would report that shrunken box mid-animation.
+        var naturalHeight = sheet.offsetHeight || 0;
+        if (naturalHeight <= 0) {
             return;
         }
 
+        var hardLimit = getViewportHeight() - SHEET_MARGIN;
+        if (hardLimit <= SHEET_MARGIN) {
+            return;
+        }
+
+        var height = Math.min(naturalHeight, hardLimit - SHEET_MARGIN);
+
+        // Keep clear of the OSD controls when the sheet still fits above them;
+        // otherwise use the whole viewport rather than squeezing it into nothing.
+        var osdLimit = getOsdBottomLimit();
+        var bottomLimit = (osdLimit < hardLimit && osdLimit - SHEET_MARGIN >= height) ? osdLimit : hardLimit;
+
+        var top = parseFloat(anchorTop);
+        if (!isNaN(top)) {
+            var newTop = Math.max(SHEET_MARGIN, Math.min(top, bottomLimit - height));
+            if (Math.abs(newTop - top) > 1) {
+                sheet.style.setProperty('top', Math.round(newTop) + 'px', 'important');
+            }
+        }
+
+        if (naturalHeight <= height) {
+            return;
+        }
+
+        // Taller than the screen: cap the sheet and let the item list scroll.
         sheet.classList.add('sst-cc-constrained');
-        sheet.style.setProperty('max-height', available + 'px', 'important');
+        sheet.style.setProperty('max-height', Math.floor(height) + 'px', 'important');
         sheet.style.overflow = 'hidden';
 
-        var scroller = sheet.querySelector('.actionSheetScroller');
         if (!scroller) {
             return;
         }
 
-        var title = sheet.querySelector('.actionSheetTitle');
-        var topUsed = title ? Math.max(0, title.getBoundingClientRect().bottom - placed.top) : 0;
-        var scrollMax = Math.floor(available - topUsed - 8);
-        if (scrollMax >= 200) {
+        // The sheet is the scroller's offsetParent, so offsetTop is the space the
+        // title and padding take above the item list.
+        var topUsed = Math.max(0, scroller.offsetTop || 0);
+        var scrollMax = Math.floor(height - topUsed - SHEET_MARGIN);
+        if (scrollMax >= MIN_SHEET_SCROLLER_HEIGHT) {
             scroller.style.setProperty('max-height', scrollMax + 'px', 'important');
-            scroller.style.overflowY = 'auto';
+            scroller.style.setProperty('overflow-y', 'auto', 'important');
         }
     }
 

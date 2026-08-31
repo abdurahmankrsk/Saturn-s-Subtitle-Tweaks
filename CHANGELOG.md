@@ -2,6 +2,11 @@
 
 All notable changes to Saturn's Subtitle Tweaks (SST) will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+- CC popover no longer runs off the bottom of the screen after SST adds its rows. Jellyfin places the popover using the height it had before the rows existed, and the repositioning SST did in 1.3.6 never took effect: the sheet carries an inline `animation: scaleup ... both`, and a filling CSS animation outranks an inline `transform`. SST now moves the sheet with `top` instead, and falls back to the full viewport when the space above the player bar is too small.
+
 ## [1.4.0] - 2026-08-29
 
 ### Added
