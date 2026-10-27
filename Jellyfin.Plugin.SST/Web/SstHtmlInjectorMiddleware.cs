@@ -163,8 +163,9 @@ public sealed partial class SstHtmlInjectorMiddleware
         var prefix = context.Request.PathBase.HasValue
             ? context.Request.PathBase.Value!.TrimEnd('/')
             : string.Empty;
+        var version = typeof(SstHtmlInjectorMiddleware).Assembly.GetName().Version?.ToString() ?? "1.4.1.0";
         var info = new FileInfo(indexPath);
-        var cacheKey = prefix + "|" + info.Length.ToString(System.Globalization.CultureInfo.InvariantCulture) + "|" + info.LastWriteTimeUtc.Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var cacheKey = prefix + "|" + version + "|" + info.Length.ToString(System.Globalization.CultureInfo.InvariantCulture) + "|" + info.LastWriteTimeUtc.Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
         lock (CacheLock)
         {
@@ -186,8 +187,8 @@ public sealed partial class SstHtmlInjectorMiddleware
         {
             var injection =
                 $"\n    <!-- SST -->\n" +
-                $"    <link rel=\"stylesheet\" href=\"{prefix}/web/sst.css\" id=\"sst-client-style\" />\n" +
-                $"    <script src=\"{prefix}/web/sst.js\" id=\"sst-script\" defer></script>\n    ";
+                $"    <link rel=\"stylesheet\" href=\"{prefix}/web/sst.css?v={version}\" id=\"sst-client-style\" />\n" +
+                $"    <script src=\"{prefix}/web/sst.js?v={version}\" id=\"sst-script\" defer></script>\n    ";
             var head = source.LastIndexOf("</head>", StringComparison.OrdinalIgnoreCase);
             source = source.Insert(head, injection);
             LogIndexInjected(_logger);

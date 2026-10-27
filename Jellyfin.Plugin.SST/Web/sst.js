@@ -1032,7 +1032,9 @@
         if (!session || !session.NowPlayingItem || !session.NowPlayingItem.Id) {
             return false;
         }
-        if (session.SupportsRemoteControl === false) {
+        var api = getApiClient();
+        var ownSessionId = api ? ((typeof api.sessionId === 'function') ? api.sessionId() : api.sessionId) : '';
+        if (ownSessionId && session.Id === ownSessionId) {
             return false;
         }
         if (ownDeviceId && session.DeviceId === ownDeviceId) {

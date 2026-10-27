@@ -13,8 +13,8 @@
                          "changelog":  "Fix: CC subtitle popover no longer hangs off the bottom of the screen or cuts off existing subtitle tracks. Accurately repositions above player controls, applies height constraints, and enables smooth scrolling.",
                          "targetAbi":  "10.11.0.0",
                          "sourceUrl":  "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST.zip",
-                         "checksum":  "a0e538c556fe5221006d1d616f4055ce",
-                         "timestamp":  "2026-10-27T19:21:00Z"
+                         "checksum":  "37f2564ef649d6b949e985630171820b",
+                         "timestamp":  "2026-10-27T19:39:49Z"
                      },
                      {
                          "version":  "1.4.0.0",
