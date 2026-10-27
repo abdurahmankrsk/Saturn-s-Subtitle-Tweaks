@@ -727,12 +727,40 @@ html.layout-tv .actionSheetMenuItem.sst-offset-item:focus {
 }
 
 .actionSheet.sst-cc-constrained {
-    overflow: hidden;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+}
+
+.actionSheet.sst-cc-constrained .actionSheetContent {
+    max-height: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
 }
 
 .actionSheet.sst-cc-constrained .actionSheetScroller {
     overflow-y: auto !important;
-    -webkit-overflow-scrolling: touch;
+    -webkit-overflow-scrolling: touch !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+}
+
+.actionSheet.sst-cc-constrained .actionSheetScroller::-webkit-scrollbar {
+    width: 6px;
+}
+
+.actionSheet.sst-cc-constrained .actionSheetScroller::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 3px;
+}
+
+.actionSheet.sst-cc-constrained .actionSheetScroller::-webkit-scrollbar-thumb {
+    background: rgba(243, 156, 18, 0.4);
+    border-radius: 3px;
+}
+
+.actionSheet.sst-cc-constrained .actionSheetScroller::-webkit-scrollbar-thumb:hover {
+    background: rgba(243, 156, 18, 0.7);
 }
 
 /* ═══════════════════════════════════════════════════════════════

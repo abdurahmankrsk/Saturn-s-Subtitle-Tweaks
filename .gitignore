@@ -37,3 +37,7 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+
+# Developer notes
+PROJECT_OVERVIEW.md
+

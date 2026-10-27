@@ -14,7 +14,7 @@
         return;
     }
 
-    var SST_VERSION = '1.4.0.0';
+    var SST_VERSION = '1.4.1.0';
     var PLUGIN_ID = 'b3a1c2d4-e5f6-4a89-9bcd-1234567890ab';
     var LOG_PREFIX = '[SST]';
     var FIND_SUBTITLES_ID = 'sst-find-subtitles';
@@ -25,9 +25,10 @@
     var OFFSET_ITEM_CLASS = 'sst-offset-item';
     var REMOTE_BANNER_ID = 'sst-remote-banner';
     var DETAIL_BTN_CLASS = 'sst-detail-btn';
-    var REMOTE_POLL_MS = 20000;
+    var REMOTE_POLL_MS = 3000;
     var SHEET_MARGIN = 8;
     var MIN_SHEET_SCROLLER_HEIGHT = 120;
+    var MAX_POPOVER_HEIGHT = 360;
 
     var COMMON_LANGUAGES = [
         { code: 'eng', name: 'English' },
@@ -1143,26 +1144,39 @@
     // pre-selected. Costs a re-buffer but every native client honours it.
     async function restartSessionWithSubtitle(ctx, index) {
         var api = getApiClient();
-        if (!api || typeof api.ajax !== 'function') {
+        if (!api) {
             return false;
         }
 
         var position = ctx.positionTicks || 0;
-        var live = await refreshSession(ctx.sessionId);
-        if (live && live.PlayState && live.PlayState.PositionTicks) {
-            position = live.PlayState.PositionTicks;
-        }
+        try {
+            var live = await refreshSession(ctx.sessionId);
+            if (live && live.PlayState && live.PlayState.PositionTicks) {
+                position = live.PlayState.PositionTicks;
+            }
+        } catch (e) {}
 
         try {
-            await api.ajax({
-                type: 'POST',
-                url: api.getUrl('Sessions/' + ctx.sessionId + '/Playing', {
-                    playCommand: 'PlayNow',
-                    itemIds: ctx.itemId,
-                    startPositionTicks: position,
-                    subtitleStreamIndex: index
-                })
-            });
+            var payload = {
+                ItemIds: [ctx.itemId],
+                StartPositionTicks: position,
+                PlayCommand: 'PlayNow',
+                SubtitleStreamIndex: index
+            };
+            if (typeof api.ajax === 'function') {
+                await api.ajax({
+                    type: 'POST',
+                    url: api.getUrl('Sessions/' + ctx.sessionId + '/Playing'),
+                    data: JSON.stringify(payload),
+                    contentType: 'application/json'
+                });
+            } else {
+                await fetch(api.getUrl('Sessions/' + ctx.sessionId + '/Playing'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Emby-Token': getAccessToken(api) },
+                    body: JSON.stringify(payload)
+                });
+            }
             return true;
         } catch (e) {
             console.debug(LOG_PREFIX, 'remote restart failed', e);
@@ -1172,8 +1186,8 @@
 
     async function applySubtitleToRemoteSession(ctx, index) {
         if (await sendSessionSubtitleIndex(ctx.sessionId, index)) {
-            for (var attempt = 0; attempt < 6; attempt++) {
-                await sleep(400);
+            for (var attempt = 0; attempt < 12; attempt++) {
+                await sleep(500);
                 var live = await refreshSession(ctx.sessionId);
                 if (live && live.PlayState && live.PlayState.SubtitleStreamIndex === index) {
                     return 'command';
@@ -1964,11 +1978,19 @@
         });
     }
 
+    function onRemoteVisibilityOrFocus() {
+        if (!document.hidden) {
+            safePollRemoteSessions();
+        }
+    }
+
     function startRemoteSessionWatch() {
         if (remotePollTimer) {
             return;
         }
         remotePollTimer = setInterval(safePollRemoteSessions, REMOTE_POLL_MS);
+        document.addEventListener('visibilitychange', onRemoteVisibilityOrFocus);
+        window.addEventListener('focus', onRemoteVisibilityOrFocus);
         safePollRemoteSessions();
     }
 
@@ -1977,6 +1999,8 @@
             clearInterval(remotePollTimer);
             remotePollTimer = null;
         }
+        document.removeEventListener('visibilitychange', onRemoteVisibilityOrFocus);
+        window.removeEventListener('focus', onRemoteVisibilityOrFocus);
         removeRemoteBanner();
     }
 
@@ -2316,25 +2340,78 @@
     function getOsdBottomLimit() {
         var viewportH = getViewportHeight();
         var limit = viewportH - SHEET_MARGIN;
-        var osd = document.querySelector('.videoOsdBottom');
-        if (!osd || osd.classList.contains('hide')) {
-            return limit;
+
+        // 1. Target the actual CC button if present
+        var btn = document.querySelector('.btnSubtitles');
+        if (btn) {
+            var btnRect = btn.getBoundingClientRect();
+            if (btnRect.top > 60 && btnRect.top < viewportH) {
+                return btnRect.top - SHEET_MARGIN;
+            }
         }
-        var osdRect = osd.getBoundingClientRect();
-        if (osdRect.top > 40 && osdRect.top < viewportH - 24 && osdRect.height > 16) {
-            return osdRect.top - SHEET_MARGIN;
+
+        // 2. Target player control buttons row or slider
+        var buttonsRow = document.querySelector('.videoOsdBottom-buttons') ||
+            document.querySelector('.osdControls');
+        if (buttonsRow) {
+            var bRect = buttonsRow.getBoundingClientRect();
+            if (bRect.top > 60 && bRect.top < viewportH) {
+                return bRect.top - SHEET_MARGIN;
+            }
+        }
+
+        var slider = document.querySelector('.sliderContainer') || document.querySelector('.videoOsdTime');
+        if (slider) {
+            var sRect = slider.getBoundingClientRect();
+            if (sRect.top > 60 && sRect.top < viewportH) {
+                return sRect.top - SHEET_MARGIN;
+            }
+        }
+
+        // 3. Fallback to .videoOsdBottom
+        var osd = document.querySelector('.videoOsdBottom');
+        if (osd && !osd.classList.contains('hide')) {
+            var osdRect = osd.getBoundingClientRect();
+            if (osdRect.height > 100 && osdRect.bottom <= viewportH) {
+                return osdRect.bottom - 54 - SHEET_MARGIN;
+            }
+            if (osdRect.top > 40 && osdRect.top < viewportH - 24) {
+                return osdRect.top - SHEET_MARGIN;
+            }
         }
         return limit;
     }
 
     /**
-     * Where Jellyfin pinned the sheet, as a plain layout offset (a client rect
-     * would report the entry animation's scaled box instead). NaN when Jellyfin
-     * did not anchor it — a centered sheet is laid out by its container and must
-     * not be moved.
+     * Where Jellyfin pinned the sheet, as a plain layout offset.
+     * Uses inline style.top, computed style, offsetTop, or client rect fallback.
+     * Returns NaN if not yet attached or laid out.
      */
     function readSheetTop(sheet) {
-        return parseFloat(sheet.style.top);
+        if (!sheet) {
+            return NaN;
+        }
+        var top = parseFloat(sheet.style.top);
+        if (!isNaN(top)) {
+            return top;
+        }
+        try {
+            var computed = window.getComputedStyle(sheet);
+            if (computed && computed.top && computed.top !== 'auto') {
+                var cTop = parseFloat(computed.top);
+                if (!isNaN(cTop)) {
+                    return cTop;
+                }
+            }
+        } catch (e) {}
+        if (typeof sheet.offsetTop === 'number' && sheet.offsetTop > 0) {
+            return sheet.offsetTop;
+        }
+        var rect = sheet.getBoundingClientRect();
+        if (rect && rect.top > 0) {
+            return rect.top;
+        }
+        return NaN;
     }
 
     function isPopoverActionSheet(sheet) {
@@ -2377,8 +2454,19 @@
             return;
         }
 
-        if (isMobileLayout() || isTvLayout() || !isPopoverActionSheet(sheet)) {
+        if (isMobileLayout() || isTvLayout()) {
             clearSheetConstraint(sheet);
+            return;
+        }
+
+        var vw = window.innerWidth || 0;
+        var w = sheet.offsetWidth || 0;
+        if (vw > 0 && w >= vw * 0.72) {
+            clearSheetConstraint(sheet);
+            return;
+        }
+        if (w === 0) {
+            // Not laid out yet; wait for subsequent scheduled passes
             return;
         }
 
@@ -2396,10 +2484,12 @@
 
         // Remember where Jellyfin anchored the sheet — every pass starts from there.
         var anchorTop = sheet.getAttribute('data-sst-anchor-top');
-        if (anchorTop === null) {
-            var measured = readSheetTop(sheet);
-            anchorTop = isNaN(measured) ? '' : String(Math.round(measured));
-            sheet.setAttribute('data-sst-anchor-top', anchorTop);
+        var measured = readSheetTop(sheet);
+        if (!anchorTop) {
+            if (!isNaN(measured)) {
+                anchorTop = String(Math.round(measured));
+                sheet.setAttribute('data-sst-anchor-top', anchorTop);
+            }
         } else if (anchorTop !== '') {
             sheet.style.setProperty('top', anchorTop + 'px', 'important');
         }
@@ -2411,46 +2501,43 @@
             return;
         }
 
-        var hardLimit = getViewportHeight() - SHEET_MARGIN;
+        var viewportH = getViewportHeight();
+        var hardLimit = viewportH - SHEET_MARGIN;
         if (hardLimit <= SHEET_MARGIN) {
             return;
         }
 
-        var height = Math.min(naturalHeight, hardLimit - SHEET_MARGIN);
-
-        // Keep clear of the OSD controls when the sheet still fits above them;
-        // otherwise use the whole viewport rather than squeezing it into nothing.
         var osdLimit = getOsdBottomLimit();
-        var bottomLimit = (osdLimit < hardLimit && osdLimit - SHEET_MARGIN >= height) ? osdLimit : hardLimit;
+        // Prefer keeping above OSD controls if there is at least 160px available
+        var bottomLimit = (osdLimit >= 160 && osdLimit < hardLimit) ? osdLimit : hardLimit;
 
         var top = parseFloat(anchorTop);
-        if (!isNaN(top)) {
-            var newTop = Math.max(SHEET_MARGIN, Math.min(top, bottomLimit - height));
-            if (Math.abs(newTop - top) > 1) {
-                sheet.style.setProperty('top', Math.round(newTop) + 'px', 'important');
+        if (isNaN(top)) {
+            top = !isNaN(measured) ? measured : SHEET_MARGIN;
+        }
+
+        // Maximum space available between top margin and the bottom limit
+        var availableSpace = Math.max(120, bottomLimit - SHEET_MARGIN);
+
+        // Compact popover height: at most MAX_POPOVER_HEIGHT (360px), and fits available space
+        var targetHeight = Math.min(naturalHeight, Math.min(MAX_POPOVER_HEIGHT, availableSpace));
+
+        // Place the bottom of the popover right above the bottomLimit (track/controls)
+        var newTop = Math.max(SHEET_MARGIN, bottomLimit - targetHeight);
+        sheet.style.setProperty('top', Math.round(newTop) + 'px', 'important');
+        sheet.style.setProperty('max-height', Math.round(targetHeight) + 'px', 'important');
+        sheet.style.setProperty('overflow', 'hidden', 'important');
+
+        // If the list is taller than targetHeight, constrain scroller so it scrolls cleanly
+        if (naturalHeight > targetHeight) {
+            sheet.classList.add('sst-cc-constrained');
+
+            if (scroller) {
+                var topUsed = Math.max(0, scroller.offsetTop || 0);
+                var scrollMax = Math.max(80, Math.floor(targetHeight - topUsed - SHEET_MARGIN));
+                scroller.style.setProperty('max-height', scrollMax + 'px', 'important');
+                scroller.style.setProperty('overflow-y', 'auto', 'important');
             }
-        }
-
-        if (naturalHeight <= height) {
-            return;
-        }
-
-        // Taller than the screen: cap the sheet and let the item list scroll.
-        sheet.classList.add('sst-cc-constrained');
-        sheet.style.setProperty('max-height', Math.floor(height) + 'px', 'important');
-        sheet.style.overflow = 'hidden';
-
-        if (!scroller) {
-            return;
-        }
-
-        // The sheet is the scroller's offsetParent, so offsetTop is the space the
-        // title and padding take above the item list.
-        var topUsed = Math.max(0, scroller.offsetTop || 0);
-        var scrollMax = Math.floor(height - topUsed - SHEET_MARGIN);
-        if (scrollMax >= MIN_SHEET_SCROLLER_HEIGHT) {
-            scroller.style.setProperty('max-height', scrollMax + 'px', 'important');
-            scroller.style.setProperty('overflow-y', 'auto', 'important');
         }
     }
 

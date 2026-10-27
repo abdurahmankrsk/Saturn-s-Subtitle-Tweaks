@@ -44,10 +44,14 @@ if ($Version -and (Test-Path $ManifestPath)) {
     if ($entry) {
         $entry.checksum = $checksum
         $entry.timestamp = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
-        $manifest | ConvertTo-Json -Depth 10 | Set-Content $ManifestPath -Encoding UTF8
+        $json = @($manifest) | ConvertTo-Json -Depth 10
+        if (-not ($json.TrimStart().StartsWith("["))) {
+            $json = "[`n$json`n]"
+        }
+        $json | Set-Content $ManifestPath -Encoding UTF8
         Write-Host "Updated manifest.json checksum for version $Version" -ForegroundColor Green
     } else {
-        Write-Warning "Version $Version not found in manifest.json — update checksum manually."
+        Write-Warning "Version $Version not found in manifest.json - update checksum manually."
     }
 }
 
