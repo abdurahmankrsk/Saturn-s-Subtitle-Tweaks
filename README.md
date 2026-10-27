@@ -85,9 +85,9 @@ YMMMUP^
 - Immediate audio-visual sync without reloading streams.
 - **Session-bound**: offset safely resets to `0.0s` when playback concludes — no accidental database persistence.
 
-### 📡 Remote Control for TV Clients
+### 📡 Companion Remote Mode for TV Clients
 - TV apps (Android TV, Google TV, webOS, Tizen, Apple TV, Roku) do **not** load Jellyfin Web, so SST cannot place its menu inside them.
-- Instead, drive them from your phone or PC: SST offers a one-tap banner for whatever your TV is playing, downloads your pick, and switches the TV to it.
+- Instead, drive them seamlessly from your phone or PC: SST displays a one-tap banner whenever your TV is playing, downloads your subtitle selection directly into the server library, and makes it available on the TV (simply exit and reopen the video to select it).
 - Optional server-side automatic download covers every client with no UI at all.
 - See [`docs/TV-CLIENTS.md`](docs/TV-CLIENTS.md) for the full picture, including how to build a Samsung/LG app with SST baked in.
 
@@ -188,44 +188,76 @@ For containerized environments with read-only filesystems, add the tags manually
 
 ---
 
-## 🎮 Usage Guide
+## 🎮 How It Works & Usage Guide
 
-```text
-    1. Watch Movie / Show
-            ↓
-    2. Click Subtitle/CC Menu in Player Controls
-            ↓
-    3. Select **Find subtitles** in the subtitle menu
-            ↓
-    4. Select Language & Click "Search"
-            ↓
-    5. Choose Subtitle & Click Download ⚡
-            ↓
-    6. Fine-tune timing with Subtitle Delay buttons if needed!
-```
+Saturn's Subtitle Tweaks adapts automatically depending on whether you are watching on a computer, a phone, or a television.
+
+---
+
+### 💻 1. On Computer / Desktop (PC, Mac, Linux Browser)
+On desktop web browsers (Chrome, Firefox, Edge, Safari, etc.):
+
+1. While playing any video, click the **CC / Subtitle** button on the bottom player control bar.
+2. Inside the subtitle menu, SST adds two dedicated controls right at the top:
+   - 🔍 **Find subtitles**: Search subtitles across all configured providers (OpenSubtitles, etc.), filter by language, check hash-match badges, and download directly without leaving your video.
+   - ⏱️ **Subtitle Offset**: Adjust subtitle delay in real-time (`-0.5s`, `-0.1s`, `+0.1s`, `+0.5s`, or reset) to sync audio and dialogue instantly.
+
+---
+
+### 📱 2. On Mobile / Phone (Android & iOS)
+On mobile web browsers or the official Jellyfin mobile app:
+
+1. Tap the video player to bring up playback controls and tap the **CC / Subtitle** icon.
+2. The menu opens with:
+   - 🔍 **Find subtitles**: Mobile-optimized search sheet to quickly find and download subtitles.
+   - ⏱️ **Subtitle Offset**: Large touch-friendly stepper buttons to nudge subtitle timing forward or backward on the fly.
+
+---
+
+### 📺 3. On TV (Android TV, Google TV, Fire TV, Apple TV, Smart TVs)
+
+#### ❓ Why can't subtitles be searched directly inside the TV app?
+Native TV apps (such as **Jellyfin for Android TV**, **Google TV**, **Fire TV**, and **Apple TV / Swiftfin**) are compiled native applications. They do **not** load `jellyfin-web` from your server and do not run web JavaScript inside their native video player (ExoPlayer). Because of this technical boundary, no server-side web plugin can inject custom buttons directly into the TV's native in-player OSD menu.
+
+#### 🛰️ The Solution: Companion Remote Download
+Instead of struggling with a clunky TV remote and on-screen keyboard, SST lets you use your phone or computer as a companion controller!
+
+1. **Watch on your TV**: Start playing any movie or episode on your TV.
+2. **Open Jellyfin on your Phone or PC**: While the TV is playing, simply open the Jellyfin app or web interface on your phone or computer.
+3. **Popup Banner Appears**: SST automatically detects that your TV is playing and displays a floating banner at the top of your screen:
+
+<p align="center">
+  <img src="docs/images/remote-banner.png" alt="SST Remote Subtitle Banner on Phone" width="600" />
+</p>
+
+4. **Tap the Banner**: Tap **"🪐 Find subtitles for [Your TV Name]"** (e.g., *Living Room TV*).
+5. **Search & Download**: Select your desired language, search, and hit **Download**. SST downloads the subtitle directly onto your Jellyfin server and attaches it to the media in your library.
+6. ⚠️ **Important Step on TV**:
+   Native TV players (like ExoPlayer) load the list of available subtitles only once when the video first starts. Because the new subtitle was downloaded mid-playback:
+   > **Simply exit (back out) of the episode or movie on your TV, and open it again.**
+   
+   Upon reopening, the newly downloaded subtitle will be right there in your TV's subtitle menu, fully selectable and ready to watch!
 
 ---
 
 ## 🌌 Supported Fleet (Client Matrix)
 
-| Client | SST In-Player UI | Drive it from phone/PC | Notes |
+| Client | In-Player Menu | Companion Mode (Phone/PC) | How it works |
 | :--- | :---: | :---: | :--- |
-| **Jellyfin Web (Desktop & Mobile)** | 🪐 Full Support | — | Primary client target |
-| **Jellyfin Android (Web Player)** | 🪐 Full Support | — | WebView loads your server's web client |
-| **Jellyfin Android (ExoPlayer)** | ❌ Native player | 🛰️ Yes | Switch the player to *Web player* for the full UI |
-| **Jellyfin Android TV / Google TV** | ❌ Native app | 🛰️ Yes | No `jellyfin-web` in the app at all |
-| **Fire TV** | ❌ Native app | 🛰️ Yes | Same Android TV app |
-| **Samsung (Tizen)** | ❌ Bundled web | 🛰️ Yes | `jellyfin-web` ships inside the `.wgt`; see [`docs/TV-CLIENTS.md`](docs/TV-CLIENTS.md) |
-| **LG (webOS)** | ❌ Bundled web | 🛰️ Yes | `jellyfin-web` ships inside the `.ipk`; see [`docs/TV-CLIENTS.md`](docs/TV-CLIENTS.md) |
-| **Jellyfin iOS (Swiftfin)** | ❌ Native app | 🛰️ Yes | Native SwiftUI client |
-| **Jellyfin Desktop (Qt/MPV)** | ❌ Bundled web | 🛰️ Yes | Uses Qt/libmpv engine |
-| **Kodi Jellyfin Addon** | ❌ Native | 🛰️ Yes | Uses Kodi subtitle subsystem |
+| **PC / Desktop Browser** | 🪐 Full Support | — | Click CC icon → Search, download & timing offset directly in-player |
+| **Mobile Phone / Tablet (Web & App)** | 🪐 Full Support | — | Tap CC icon → Search, download & timing offset directly in-player |
+| **Jellyfin Android TV / Google TV** | ❌ Native app | 🛰️ Supported | Open Jellyfin on phone/PC → Tap banner popup → Download → Exit & reopen video on TV |
+| **Fire TV** | ❌ Native app | 🛰️ Supported | Open Jellyfin on phone/PC → Tap banner popup → Download → Exit & reopen video on TV |
+| **Apple TV (Swiftfin)** | ❌ Native app | 🛰️ Supported | Open Jellyfin on phone/PC → Tap banner popup → Download → Exit & reopen video on TV |
+| **Samsung (Tizen) / LG (webOS)** | ❌ Bundled web | 🛰️ Supported | Companion banner on phone/PC (or sideload custom web build via [`docs/TV-CLIENTS.md`](docs/TV-CLIENTS.md)) |
+| **Jellyfin Desktop (Qt/MPV)** | ❌ Bundled web | 🛰️ Supported | Uses Qt/libmpv engine; driven via companion banner or cast |
+| **Kodi Jellyfin Addon** | ❌ Native | 🛰️ Supported | Uses Kodi subtitle subsystem |
 
 > [!NOTE]
-> **Why the ❌ column.** SST injects itself into `jellyfin-web`'s `index.html` as your server
-> serves it. Native apps never load that page, and the smart-TV apps package their own copy of
-> `jellyfin-web` inside the app. Server-side injection cannot reach either. The remote-control
-> column is how SST covers them anyway.
+> **Why native TV apps use Companion Mode**: SST injects itself into `jellyfin-web`'s `index.html` as your server
+> serves it. Native apps never load that page, and smart-TV apps package their own copy of
+> `jellyfin-web` inside the app. Server-side injection cannot reach either. The companion remote-control
+> banner is how SST covers them cleanly without requiring custom sideloading.
 
 ---
 

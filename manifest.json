@@ -9,6 +9,14 @@
     "imageUrl":  "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST/Web/icon.png",
     "versions":  [
                      {
+                         "version":  "1.4.2.0",
+                         "changelog":  "Fix: Remote TV download notification now clearly instructs to exit and reopen video to select new subtitles. Improved remote TV stability by avoiding disruptive remote commands on Android TV.",
+                         "targetAbi":  "10.11.0.0",
+                         "sourceUrl":  "https://raw.githubusercontent.com/abdurahmankrsk/Saturn-s-Subtitle-Tweaks/main/Jellyfin.Plugin.SST.zip",
+                         "checksum":  "39557266b1d6284cc940ab5b98b746b0",
+                         "timestamp":  "2026-10-27T20:02:40Z"
+                     },
+                     {
                          "version":  "1.4.1.0",
                          "changelog":  "Fix: CC subtitle popover no longer hangs off the bottom of the screen or cuts off existing subtitle tracks. Accurately repositions above player controls, applies height constraints, and enables smooth scrolling.",
                          "targetAbi":  "10.11.0.0",

@@ -1057,6 +1057,7 @@
             subtitleCount: countSubtitleStreams(session.NowPlayingItem),
             remote: true,
             deviceName: sessionLabel(session),
+            supportsRemoteControl: session.SupportsRemoteControl !== false,
             positionTicks: state.PositionTicks || 0
         };
     }
@@ -1200,6 +1201,10 @@
     }
 
     async function applySubtitleToRemoteSession(ctx, index) {
+        if (ctx.supportsRemoteControl === false) {
+            return null;
+        }
+
         if (await sendSessionSubtitleIndex(ctx.sessionId, index)) {
             for (var attempt = 0; attempt < 8; attempt++) {
                 await sleep(500);
@@ -1832,26 +1837,27 @@
                     return;
                 }
 
-                statusEl.innerHTML = 'Downloaded. Sending to ' + escapeHtml(playing.deviceName) + '&hellip;';
+                statusEl.innerHTML = 'Downloaded. Updating library&hellip;';
 
                 var newIndex = await findNewSubtitleIndex(playing.itemId, previousIndexes, language, releaseName);
-                if (newIndex === null) {
-                    statusEl.innerHTML = 'Downloaded to the library, but the new track did not appear in time. Open the subtitle menu on ' +
-                        escapeHtml(playing.deviceName) + ' and pick it there.';
-                    statusEl.className = 'sst-status sst-status-error';
-                    return;
+
+                var how = null;
+                if (playing.supportsRemoteControl !== false && newIndex !== null) {
+                    statusEl.innerHTML = 'Downloaded. Sending to ' + escapeHtml(playing.deviceName) + '&hellip;';
+                    how = await applySubtitleToRemoteSession(playing, newIndex);
                 }
 
-                var how = await applySubtitleToRemoteSession(playing, newIndex);
                 if (how === 'command') {
-                    statusEl.innerHTML = 'Subtitle applied on ' + escapeHtml(playing.deviceName) + '.';
+                    statusEl.innerHTML = '✓ Subtitle applied on ' + escapeHtml(playing.deviceName) + '.';
+                    statusEl.className = 'sst-status sst-status-success';
                 } else if (how === 'restart') {
-                    statusEl.innerHTML = 'Subtitle applied on ' + escapeHtml(playing.deviceName) +
-                        '. Playback resumed from the same spot so the new track could load.';
+                    statusEl.innerHTML = '✓ Subtitle applied on ' + escapeHtml(playing.deviceName) +
+                        '. Playback resumed from the same spot.';
+                    statusEl.className = 'sst-status sst-status-success';
                 } else {
-                    statusEl.innerHTML = 'Downloaded to the library, but ' + escapeHtml(playing.deviceName) +
-                        ' did not accept the change. Open the subtitle menu there and pick it manually.';
-                    statusEl.className = 'sst-status sst-status-error';
+                    statusEl.innerHTML = '✓ Subtitle downloaded to library! Exit and reopen the video on ' +
+                        escapeHtml(playing.deviceName) + ' to load and select it.';
+                    statusEl.className = 'sst-status sst-status-success';
                 }
                 return;
             }

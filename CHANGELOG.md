@@ -2,6 +2,15 @@
 
 All notable changes to Saturn's Subtitle Tweaks (SST) will be documented in this file.
 
+## [1.4.2] - 2026-10-27
+
+### Fixed
+- **Remote TV download notification**: Remote subtitle downloads for TV sessions (such as Android TV / ExoPlayer) now display a clean success notification prompting the user to exit and reopen the video on TV to load and select the newly downloaded subtitle stream.
+- **TV playback stability**: Prevent sending disruption-causing `PlayNow` / `SetSubtitleStreamIndex` commands to remote TV sessions that report `SupportsRemoteControl: false`.
+
+### Documentation
+- **Multi-Device Usage Guide**: Expanded README with detailed instructions for PC, Mobile, and TV companion workflows, including popup screenshot and technical explanation of TV app limitations.
+
 ## [1.4.1] - 2026-10-27
 
 ### Fixed

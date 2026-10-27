@@ -30,9 +30,10 @@ your phone or computer. SST shows a banner:
 
 > 🪐 Find subtitles for *Living Room TV*
 
-Tap it, pick a subtitle, and SST downloads it and switches the TV to it. If the TV
-will not accept the change mid-stream, SST replays the same item from the same
-position with the new track already selected, which every native client honours.
+Tap it, pick a subtitle, and SST downloads it directly to your library. Because native
+TV video players (like ExoPlayer) load subtitle tracks only when playback starts, simply
+exit (back out) and reopen the video on your TV once downloaded — the new subtitle will be right
+there in the TV's subtitle menu.
 
 You can also cast to the TV first — SST then points at the cast target
 automatically.
