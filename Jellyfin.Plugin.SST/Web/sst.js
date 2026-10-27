@@ -1061,11 +1061,17 @@
 
     async function fetchSessions() {
         var api = getApiClient();
-        if (!api || typeof api.getJSON !== 'function' || typeof api.getUrl !== 'function') {
+        if (!api) {
             return [];
         }
         try {
-            return (await api.getJSON(api.getUrl('Sessions', { activeWithinSeconds: 300 }))) || [];
+            if (typeof api.getSessions === 'function') {
+                return (await api.getSessions()) || [];
+            }
+            if (typeof api.getJSON === 'function' && typeof api.getUrl === 'function') {
+                return (await api.getJSON(api.getUrl('Sessions'))) || [];
+            }
+            return [];
         } catch (e) {
             console.debug(LOG_PREFIX, 'session list failed', e);
             return [];
@@ -1120,20 +1126,30 @@
 
     async function sendSessionSubtitleIndex(sessionId, index) {
         var api = getApiClient();
-        if (!api || typeof api.ajax !== 'function') {
+        if (!api) {
             return false;
         }
         try {
-            await api.ajax({
-                type: 'POST',
-                url: api.getUrl('Sessions/' + sessionId + '/Command'),
-                data: JSON.stringify({
+            if (typeof api.sendCommand === 'function') {
+                await api.sendCommand(sessionId, {
                     Name: 'SetSubtitleStreamIndex',
                     Arguments: { Index: String(index) }
-                }),
-                contentType: 'application/json'
-            });
-            return true;
+                });
+                return true;
+            }
+            if (typeof api.ajax === 'function') {
+                await api.ajax({
+                    type: 'POST',
+                    url: api.getUrl('Sessions/' + sessionId + '/Command'),
+                    data: JSON.stringify({
+                        Name: 'SetSubtitleStreamIndex',
+                        Arguments: { Index: String(index) }
+                    }),
+                    contentType: 'application/json'
+                });
+                return true;
+            }
+            return false;
         } catch (e) {
             console.debug(LOG_PREFIX, 'remote SetSubtitleStreamIndex failed', e);
             return false;
@@ -1157,27 +1173,24 @@
         } catch (e) {}
 
         try {
-            var payload = {
-                ItemIds: [ctx.itemId],
-                StartPositionTicks: position,
+            var query = {
+                ItemIds: ctx.itemId,
                 PlayCommand: 'PlayNow',
+                StartPositionTicks: position,
                 SubtitleStreamIndex: index
             };
+            if (typeof api.sendPlayCommand === 'function') {
+                await api.sendPlayCommand(ctx.sessionId, query);
+                return true;
+            }
             if (typeof api.ajax === 'function') {
                 await api.ajax({
                     type: 'POST',
-                    url: api.getUrl('Sessions/' + ctx.sessionId + '/Playing'),
-                    data: JSON.stringify(payload),
-                    contentType: 'application/json'
+                    url: api.getUrl('Sessions/' + ctx.sessionId + '/Playing', query)
                 });
-            } else {
-                await fetch(api.getUrl('Sessions/' + ctx.sessionId + '/Playing'), {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-Emby-Token': getAccessToken(api) },
-                    body: JSON.stringify(payload)
-                });
+                return true;
             }
-            return true;
+            return false;
         } catch (e) {
             console.debug(LOG_PREFIX, 'remote restart failed', e);
             return false;
@@ -1186,7 +1199,7 @@
 
     async function applySubtitleToRemoteSession(ctx, index) {
         if (await sendSessionSubtitleIndex(ctx.sessionId, index)) {
-            for (var attempt = 0; attempt < 12; attempt++) {
+            for (var attempt = 0; attempt < 8; attempt++) {
                 await sleep(500);
                 var live = await refreshSession(ctx.sessionId);
                 if (live && live.PlayState && live.PlayState.SubtitleStreamIndex === index) {
@@ -1903,13 +1916,22 @@
         }
         var pbm = getPlaybackManager();
         try {
-            if (pbm && typeof pbm.isPlayingVideo === 'function') {
-                return pbm.isPlayingVideo();
+            if (pbm) {
+                if (typeof pbm.isPlayingVideo === 'function' && pbm.isPlayingVideo()) {
+                    return true;
+                }
+                if (typeof pbm.isPlaying === 'function' && pbm.isPlaying()) {
+                    return true;
+                }
             }
         } catch (e) {
             console.debug(LOG_PREFIX, 'local playback check failed', e);
         }
-        return !!document.querySelector('video.htmlvideoplayer');
+        var video = document.querySelector('video.htmlvideoplayer') || document.querySelector('video');
+        if (video) {
+            return !video.paused && !video.ended && video.currentTime > 0 && (video.offsetWidth > 0 || video.offsetHeight > 0);
+        }
+        return false;
     }
 
     function renderRemoteBanner(session) {
@@ -1937,7 +1959,8 @@
             showFindDialog(contextFromSession(session));
         });
         banner.querySelector('.sst-remote-dismiss').addEventListener('click', function () {
-            dismissedSessions[session.Id] = true;
+            var itemKey = session.NowPlayingItem ? session.NowPlayingItem.Id : session.Id;
+            dismissedSessions[itemKey] = Date.now();
             removeRemoteBanner();
         });
 
@@ -1945,7 +1968,7 @@
     }
 
     async function pollRemoteSessions() {
-        if (isDialogOpen || document.hidden || isLocalPlaybackActive()) {
+        if (isDialogOpen || isLocalPlaybackActive()) {
             removeRemoteBanner();
             return;
         }
@@ -1958,11 +1981,16 @@
 
         var sessions = await listRemoteSessions();
         var pick = null;
+        var now = Date.now();
         for (var i = 0; i < sessions.length; i++) {
-            if (!dismissedSessions[sessions[i].Id]) {
-                pick = sessions[i];
-                break;
+            var s = sessions[i];
+            var itemKey = s.NowPlayingItem ? s.NowPlayingItem.Id : s.Id;
+            var dismissedAt = dismissedSessions[itemKey];
+            if (dismissedAt && (now - dismissedAt < 60000)) {
+                continue;
             }
+            pick = s;
+            break;
         }
 
         if (pick) {
@@ -2341,7 +2369,18 @@
         var viewportH = getViewportHeight();
         var limit = viewportH - SHEET_MARGIN;
 
-        // 1. Target the actual CC button if present
+        // 1. Target the actual seek slider / track (progress bar) first
+        var slider = document.querySelector('.osdPositionSlider') ||
+            document.querySelector('.sliderContainer') ||
+            document.querySelector('.videoOsdTime');
+        if (slider) {
+            var sRect = slider.getBoundingClientRect();
+            if (sRect.top > 60 && sRect.top < viewportH) {
+                return sRect.top - SHEET_MARGIN;
+            }
+        }
+
+        // 2. Target player control buttons row or CC button
         var btn = document.querySelector('.btnSubtitles');
         if (btn) {
             var btnRect = btn.getBoundingClientRect();
@@ -2350,7 +2389,6 @@
             }
         }
 
-        // 2. Target player control buttons row or slider
         var buttonsRow = document.querySelector('.videoOsdBottom-buttons') ||
             document.querySelector('.osdControls');
         if (buttonsRow) {
@@ -2360,20 +2398,12 @@
             }
         }
 
-        var slider = document.querySelector('.sliderContainer') || document.querySelector('.videoOsdTime');
-        if (slider) {
-            var sRect = slider.getBoundingClientRect();
-            if (sRect.top > 60 && sRect.top < viewportH) {
-                return sRect.top - SHEET_MARGIN;
-            }
-        }
-
         // 3. Fallback to .videoOsdBottom
         var osd = document.querySelector('.videoOsdBottom');
         if (osd && !osd.classList.contains('hide')) {
             var osdRect = osd.getBoundingClientRect();
             if (osdRect.height > 100 && osdRect.bottom <= viewportH) {
-                return osdRect.bottom - 54 - SHEET_MARGIN;
+                return Math.max(120, osdRect.bottom - 100);
             }
             if (osdRect.top > 40 && osdRect.top < viewportH - 24) {
                 return osdRect.top - SHEET_MARGIN;
